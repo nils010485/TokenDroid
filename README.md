@@ -1,11 +1,25 @@
 # TokenDroid
 
-Analytics dashboard for Factory Droid usage data. Parses session files from
-`~/.factory/sessions/`, indexes them into a local SQLite cache, and provides
-multiple interfaces to explore token consumption, model usage, and project
-activity.
+Analytics dashboard for [Factory](https://factory.ai/) Droid usage data. Parses
+session files from `~/.factory/sessions/`, indexes them into a local SQLite
+cache, and provides multiple interfaces to explore token consumption, model
+usage, and project activity.
+
+> **Note:** This project is not affiliated with [Factory](https://factory.ai/).
 
 ![Dashboard](docs/dashboard.png)
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/nils010485/TokenDroid.git
+cd TokenDroid
+uv sync
+tokendroid sync
+tokendroid stat overview
+```
 
 ---
 
