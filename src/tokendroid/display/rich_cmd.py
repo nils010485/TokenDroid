@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ..db import get_global_stats, get_monthly_stats, get_top_sessions, get_weekly_stats
+from ..db import get_global_stats, get_monthly_stats, get_sessions, get_top_sessions, get_weekly_stats
 from .utils import (
     COLOR_ACCENT,
     COLOR_DIM,
@@ -420,6 +420,70 @@ def display_top_sessions(limit: int = 15, json_output: bool = False) -> None:
             fmt_tokens(total),
             fmt_input_cache(inp, cache),
             fmt_tokens(out),
+            fmt_date(str(s.get("started_at", ""))),
+            str(s.get("title", ""))[:35],
+        )
+    console.print()
+    console.print(t)
+    console.print()
+
+
+def display_sessions(
+    limit: int = 15,
+    show_top: bool = False,
+    project: str | None = None,
+    model: str | None = None,
+    json_output: bool = False,
+) -> None:
+    """List recent sessions, or top sessions if --top."""
+    console = Console()
+
+    if show_top:
+        rows = get_top_sessions(limit)
+        title = "Top Sessions (by total tokens)"
+    else:
+        rows = get_sessions(
+            project_filter=project,
+            model_filter=model,
+            limit=limit,
+            order_by="started_at DESC",
+        )
+        rows = rows
+        title = "Recent Sessions"
+
+    if json_output:
+        print(json_mod.dumps(rows, indent=2, ensure_ascii=False))
+        return
+
+    t = Table(
+        title=title,
+        show_lines=False,
+        border_style="dim",
+        title_style=f"bold {COLOR_ACCENT}",
+    )
+    t.add_column("#", style=COLOR_DIM, width=3)
+    t.add_column("Project", style="bold white", max_width=28)
+    t.add_column("Model", style=COLOR_TEAL, max_width=22)
+    t.add_column("Input", justify="right", style=COLOR_GREEN)
+    t.add_column("Cache", justify="right", style=COLOR_GREEN)
+    t.add_column("Output", justify="right", style=COLOR_TEAL)
+    t.add_column("Active", justify="right", style=COLOR_MAUVE)
+    t.add_column("Date", style=COLOR_DIM)
+    t.add_column("Title", max_width=35, no_wrap=True)
+
+    for i, s in enumerate(rows, 1):
+        inp = s.get("input_tokens", 0) or 0
+        cache = s.get("cache_tokens", 0) or 0
+        out = s.get("output_tokens", 0) or 0
+        active = s.get("active_time_ms", 0) or 0
+        t.add_row(
+            str(i),
+            str(s.get("project", "")),
+            str(s.get("model_display", "")),
+            fmt_tokens(inp),
+            fmt_tokens(cache) if cache else "-",
+            fmt_tokens(out),
+            fmt_duration(active),
             fmt_date(str(s.get("started_at", ""))),
             str(s.get("title", ""))[:35],
         )

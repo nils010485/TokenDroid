@@ -89,6 +89,31 @@ def monthly(
 
 @stat.command()
 @click.option("--limit", "-n", default=15, help="Number of sessions to show")
+@click.option("--top", "show_top", is_flag=True, help="Sort by total tokens instead of date")
+@click.option("--project", "-p", default=None, help="Filter by project")
+@click.option("--model", "-m", default=None, help="Filter by model")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def sessions(
+    limit: int,
+    show_top: bool,
+    project: str | None,
+    model: str | None,
+    output_json: bool,
+) -> None:
+    """List recent sessions, or top sessions with --top."""
+    from .display.rich_cmd import display_sessions
+
+    display_sessions(
+        limit=limit,
+        show_top=show_top,
+        project=project,
+        model=model,
+        json_output=output_json,
+    )
+
+
+@stat.command()
+@click.option("--limit", "-n", default=15, help="Number of sessions to show")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def top(limit: int, output_json: bool) -> None:
     """Top sessions by total tokens."""
