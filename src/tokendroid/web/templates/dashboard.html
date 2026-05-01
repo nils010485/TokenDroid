@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TokenDroid Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#090b11;--sidebar-bg:#0d0f17;--card:#11131c;--card-hover:#161927;--border:#1e2130;--text:#e2e5ec;--text-muted:#6b7280;--text-dim:#3f4557;--accent:#6366f1;--accent-soft:#818cf8;--green:#22c55e;--teal:#14b8a6;--yellow:#eab308;--red:#ef4444;--purple:#a855f7;--orange:#f97316;--blue:#3b82f6;--radius:12px;--radius-sm:8px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+.app{display:flex;height:100vh;width:100vw}
+.sidebar{width:210px;background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-brand{padding:20px 20px 12px;display:flex;align-items:center;gap:10px}
+.sidebar-brand .logo{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(99,102,241,0.25)}
+.sidebar-brand .logo svg{width:16px;height:16px;color:#fff}
+.sidebar-brand h2{font-size:0.95rem;font-weight:700;letter-spacing:-0.2px}
+.sidebar-brand span{font-size:0.65rem;color:var(--text-dim);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;display:block;margin-top:1px}
+.sidebar-nav{flex:1;display:flex;flex-direction:column;gap:2px;padding:8px 10px;overflow-y:auto}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);font-size:0.7rem;color:var(--text-dim)}
+.sidebar-footer .live{display:flex;align-items:center;gap:6px;color:var(--green)}
+.sidebar-footer .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;background:transparent;color:var(--text-muted);font-family:inherit;font-size:0.82rem;font-weight:500;border-radius:var(--radius-sm);cursor:pointer;text-align:left;width:100%}
+.nav-item:hover{background:rgba(255,255,255,0.03);color:var(--text)}
+.nav-item.on{background:rgba(99,102,241,0.1);color:var(--accent-soft)}
+.nav-item.on .nav-icon{color:var(--accent-soft)}
+.nav-icon{width:18px;height:18px;opacity:0.7;flex-shrink:0}
+.nav-item.on .nav-icon{opacity:1}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{height:60px;border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:rgba(9,11,17,0.8);backdrop-filter:blur(12px);z-index:10}
+.topbar-left{display:flex;flex-direction:column;gap:1px}
+.topbar-left h1{font-size:1.05rem;font-weight:700;letter-spacing:-0.2px}
+.topbar-left .range{font-size:0.7rem;color:var(--text-muted)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;background:rgba(34,197,94,0.08);color:var(--green);border:1px solid rgba(34,197,94,0.15)}
+.timestamp{font-size:0.72rem;color:var(--text-dim)}
+.content{flex:1;overflow-y:auto;padding:24px 28px 40px}
+.content::-webkit-scrollbar{width:6px}
+.content::-webkit-scrollbar-track{background:transparent}
+.content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:28px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden}
+.kpi:hover{border-color:#2a2e42}
+.kpi::before{content:' ';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--kpi-color),transparent)}
+.kpi-value{font-size:1.4rem;font-weight:700;color:var(--text);margin-top:6px;line-height:1.2}
+.kpi-label{font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.panes{}
+.pane{display:none}
+.pane.on{display:block}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.cd{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.cd:hover{border-color:#252a3c}
+.cd h3{font-size:0.7rem;font-weight:600;color:var(--text-muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em}
+.cd.w{grid-column:1/-1}
+canvas{width:100%!important}
+table{width:100%;border-collapse:collapse;font-size:0.78rem}
+th{color:var(--text-muted);text-align:left;padding:8px 10px;font-weight:500;border-bottom:1px solid var(--border);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:var(--text)}
+th .s{margin-left:4px;opacity:.2;font-size:.65em}
+th.on .s{opacity:1;color:var(--accent)}
+td{padding:7px 10px;border-bottom:1px solid var(--border);color:#9ca3af}
+tr:hover td{background:rgba(255,255,255,0.015);color:var(--text)}
+.bar{display:inline-block;height:5px;border-radius:3px;min-width:1px;vertical-align:middle}
+.sub{font-size:.7rem;color:var(--text-dim)}
+@media(max-width:900px){.g2,.g3{grid-template-columns:1fr}.sidebar{width:64px}.sidebar-brand h2,.sidebar-brand span,.nav-label,.sidebar-footer span{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div>
+        <h2>TokenDroid</h2>
+        <span>Analytics</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="tabs"></nav>
+    <div class="sidebar-footer">
+      <div class="live"><span class="dot"></span><span id="ts">Connecting...</span></div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1>Dashboard</h1>
+        <span class="range" id="rng"></span>
+      </div>
+      <div class="topbar-right">
+        <span class="badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> Auto-refresh 30s</span>
+      </div>
+    </header>
+    <main class="content">
+      <div class="kpi-grid" id="kpis"></div>
+      <div class="panes" id="panes"><p style="padding:60px;text-align:center;color:var(--text-dim);font-size:0.85rem">Loading data...</p></div>
+    </main>
+  </div>
+</div>
+<script>
+const C={ac:'#6366f1',gn:'#22c55e',tl:'#14b8a6',yl:'#eab308',rd:'#ef4444',pr:'#a855f7',or:'#f97316',dm:'#6b7280'};
+const CL=[C.ac,C.gn,C.tl,C.yl,C.rd,C.pr,C.or,C.dm];
+Chart.defaults.color=C.dm;Chart.defaults.borderColor='rgba(255,255,255,0.06)';Chart.defaults.font.family="'Inter',system-ui,sans-serif";
+Chart.defaults.plugins.tooltip.backgroundColor='#11131c';
+Chart.defaults.plugins.tooltip.titleColor='#e2e5ec';
+Chart.defaults.plugins.tooltip.bodyColor='#9ca3af';
+Chart.defaults.plugins.tooltip.borderColor='#1e2130';
+Chart.defaults.plugins.tooltip.borderWidth=1;
+Chart.defaults.plugins.tooltip.padding=10;
+Chart.defaults.plugins.tooltip.cornerRadius=8;
+Chart.defaults.plugins.tooltip.displayColors=true;
+Chart.defaults.plugins.tooltip.boxWidth=8;
+Chart.defaults.animation=false;
+const GC='rgba(255,255,255,0.02)';
+let D=null;
+
+function fmt(n){if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toString()}
+function fc(i,c){return c?fmt(i)+' <span class="sub">('+fmt(c)+')</span>':fmt(i)}
+function tot(a,k){return a.reduce((s,d)=>s+(d[k]||0),0)}
+function pct(p,t){return t?p/Math.max(t,1)*100:0}
+function bar(v,mx,w=60,c=C.ac){const p=Math.min(v/Math.max(mx,1),1);return `<span class="bar" style="width:${Math.round(p*w)}px;background:${c}"></span>`}
+
+async function load(){
+  const r=await fetch('/api/dashboard');D=await r.json();
+  document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+  build();
+}
+async function init(){await load();setInterval(load,30000)}
+function build(){
+  buildKPIs();buildTabs();
+  ['buildDaily','buildWeekly','buildMonthly','buildTimeline','buildModels','buildProjects','buildSessions','buildHeatmap'].forEach(fn=>{try{window[fn]()}catch(e){console.error(fn,e)}});
+  document.querySelector('#panes>p')?.remove();
+}
+
+function buildKPIs(){
+  const ti=tot(D.daily,'input'),tc=tot(D.daily,'cache'),to=tot(D.daily,'output'),ta=tot(D.daily,'active_h'),ts=tot(D.daily,'sessions'),tm=tot(D.daily,'messages');
+  const tt=ti+tc+to;
+  document.getElementById('rng').textContent=D.daily.length?D.daily[0].date+' \u2192 '+D.daily[D.daily.length-1].date:'';
+  const items=[
+    ['Sessions',ts.toLocaleString(),'var(--blue)'],
+    ['Total Tokens',fmt(tt),'var(--accent)'],
+    ['Input (cache)',fc(ti,tc),'var(--green)'],
+    ['Output',fmt(to),'var(--teal)'],
+    ['Active',ta.toFixed(1)+'h','var(--purple)'],
+    ['Messages',tm.toLocaleString(),'var(--yellow)'],
+    ['Projects',D.projects.length,'var(--orange)'],
+    ['Models',D.models.length,'var(--red)'],
+  ];
+  document.getElementById('kpis').innerHTML=items.map(([l,v,c])=>`<div class="kpi" style="--kpi-color:${c}"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
+}
+
+const TABS=[{id:'daily',l:'Daily'},{id:'weekly',l:'Weekly'},{id:'monthly',l:'Monthly'},{id:'timeline',l:'Timeline'},{id:'models',l:'Models'},{id:'projects',l:'Projects'},{id:'sessions',l:'Sessions'},{id:'heatmap',l:'Patterns'}];
+const ICONS={
+  daily:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  weekly:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  monthly:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4h22M1 12h22M1 20h22"/></svg>',
+  timeline:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  models:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+  projects:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+  sessions:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  heatmap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>',
+};
+function buildTabs(){
+  const nav=document.getElementById('tabs'),ps=document.getElementById('panes');
+  nav.innerHTML='';ps.innerHTML='';
+  TABS.forEach((t,i)=>{
+    const b=document.createElement('button');b.className='nav-item'+(i===0?' on':'');b.innerHTML='<span class="nav-icon">'+ICONS[t.id]+'</span><span class="nav-label">'+t.l+'</span>';
+    b.onclick=()=>{nav.querySelectorAll('.nav-item').forEach(x=>x.className='nav-item');b.className='nav-item on';ps.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));document.getElementById('p-'+t.id).classList.add('on')};
+    nav.appendChild(b);
+    const p=document.createElement('div');p.className='pane'+(i===0?' on':'');p.id='p-'+t.id;ps.appendChild(p);
+  });
+}
+function mkCd(cls){const d=document.createElement('div');d.className='cd'+(cls?' '+cls:'');return d}
+function mkT(h,r){const t=document.createElement('table');t.innerHTML='<thead><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead>';const tb=document.createElement('tbody');r.forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=row.map(c=>'<td>'+c+'</td>').join('');tb.appendChild(tr)});t.appendChild(tb);return t}
+function mkST(h,r,num){
+  const t=document.createElement('table'),th=document.createElement('thead'),tr=document.createElement('tr');
+  h.forEach((x,i)=>{const e=document.createElement('th');e.innerHTML=x+' <span class="s">&#9650;</span>';e.onclick=()=>{doSort(t,i,num.includes(i))};tr.appendChild(e)});
+  th.appendChild(tr);t.appendChild(th);
+  const tb=document.createElement('tbody');r.forEach(row=>{const tr2=document.createElement('tr');tr2.innerHTML=row.map(c=>'<td>'+c+'</td>').join('');tb.appendChild(tr2)});
+  t.appendChild(tb);return t;
+}
+function doSort(t,col,num){
+  const tb=t.querySelector('tbody'),rows=[...tb.querySelectorAll('tr')];
+  const asc=t.dataset.sc==col&&t.dataset.sd!=='a';
+  t.dataset.sc=col;t.dataset.sd=asc?'a':'d';
+  t.querySelectorAll('th').forEach((th,i)=>{th.className=i===col?'on':'';th.querySelector('.s').innerHTML=i===col?(asc?'&#9650;':'&#9660;'):'&#9650;'});
+  rows.sort((a,b)=>{let va=a.cells[col].textContent,vb=b.cells[col].textContent;if(num){va=parseFloat(va.match(/[\d.]+/)?.[0]||0);vb=parseFloat(vb.match(/[\d.]+/)?.[0]||0);return asc?va-vb:vb-va}return asc?va.localeCompare(vb):vb.localeCompare(va)});
+  rows.forEach(r=>tb.appendChild(r));
+}
+function wk(d){const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));dt.setUTCDate(dt.getUTCDate()+4-(dt.getUTCDay()||7));const y=dt.getUTCFullYear();return y+'-W'+String(Math.ceil(((dt-new Date(Date.UTC(y,0,1)))/864e5+1)/7)).padStart(2,'0')}
+
+function buildDaily(){
+  const s=document.getElementById('p-daily'),g=document.createElement('div');g.className='g2';
+  const c1=mkCd('w');c1.innerHTML='<h3>Tokens / Day</h3><canvas id="xd1" height="160"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Sessions</h3><canvas id="xd2" height="160"></canvas>';g.appendChild(c2);
+  const c3=mkCd();c3.innerHTML='<h3>Active Hours</h3><canvas id="xd3" height="160"></canvas>';g.appendChild(c3);
+  s.appendChild(g);
+  const dl=D.daily.map(d=>d.date);
+  new Chart(document.getElementById('xd1'),{type:'line',data:{labels:dl,datasets:[
+    {label:'Input',data:D.daily.map(d=>d.input),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
+    {label:'Output',data:D.daily.map(d=>d.output),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  const mx=tot(D.daily,'sessions');
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input (cache)','Output','Active','Msgs','Sessions'],
+    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fc(d.input,d.cache),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
+}
+
+function buildWeekly(){
+  const s=document.getElementById('p-weekly');
+  const ws={};
+  D.daily.forEach(d=>{const k=wk(new Date(d.date));if(!ws[k])ws[k]={s:0,i:0,o:0,c:0,a:0,m:0};const w=ws[k];w.s+=d.sessions;w.i+=d.input;w.o+=d.output;w.c+=d.cache||0;w.a+=d.active_h;w.m+=d.messages});
+  const wl=Object.keys(ws).sort();
+  const c=mkCd('w');c.innerHTML='<h3>Weekly Tokens</h3><canvas id="xw1" height="160"></canvas>';s.appendChild(c);
+  new Chart(document.getElementById('xw1'),{type:'bar',data:{labels:wl,datasets:[
+    {label:'Input',data:wl.map(w=>ws[w].i),backgroundColor:C.gn+'77',borderRadius:3},
+    {label:'Output',data:wl.map(w=>ws[w].o),backgroundColor:C.tl+'77',borderRadius:3}
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  const mx=Math.max(...wl.map(w=>ws[w].s));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input (cache)','Output','Active','Msgs',''],
+    wl.slice().reverse().map(w=>[w,ws[w].s,fc(ws[w].i,ws[w].c),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
+}
+
+function buildMonthly(){
+  const s=document.getElementById('p-monthly');
+  const c=mkCd('w');c.innerHTML='<h3>Monthly Tokens</h3><canvas id="xm1" height="160"></canvas>';s.appendChild(c);
+  new Chart(document.getElementById('xm1'),{type:'bar',data:{labels:D.monthly.map(m=>m.month),datasets:[
+    {label:'Input',data:D.monthly.map(m=>m.input),backgroundColor:C.gn+'77',borderRadius:3},
+    {label:'Output',data:D.monthly.map(m=>m.output),backgroundColor:C.tl+'77',borderRadius:3}
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  const mx=Math.max(...D.monthly.map(m=>m.sessions));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input (cache)','Output','Active','Msgs',''],
+    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fc(m.input,m.cache),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
+}
+
+function buildTimeline(){
+  const s=document.getElementById('p-timeline');
+  const c=mkCd('w');c.innerHTML='<h3>Model Usage Over Time</h3><canvas id="xt1" height="160"></canvas>';s.appendChild(c);
+  const modelDays={};
+  D.top.forEach(s=>{
+    if(!s.date)return;
+    const mk=s.model;
+    if(!modelDays[mk])modelDays[mk]={};
+    if(!modelDays[mk][s.date])modelDays[mk][s.date]={i:0,o:0};
+    modelDays[mk][s.date].i+=s.input||0;
+    modelDays[mk][s.date].o+=s.output||0;
+  });
+  const allDates=[...new Set(D.top.map(s=>s.date).filter(Boolean))].sort();
+  const topModels=D.models.slice(0,6).map(m=>m.name);
+  new Chart(document.getElementById('xt1'),{type:'line',data:{labels:allDates,datasets:topModels.map((mk,i)=>({
+    label:mk.length>20?mk.slice(0,20)+'...':mk,
+    data:allDates.map(d=>(modelDays[mk]&&modelDays[mk][d])?modelDays[mk][d].o:0),
+    borderColor:CL[i%CL.length],
+    backgroundColor:CL[i%CL.length]+'10',
+    fill:false,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2
+  }))},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8,font:{size:10}}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+}
+
+function buildModels(){
+  const s=document.getElementById('p-models'),g=document.createElement('div');g.className='g2';
+  const c1=mkCd();c1.innerHTML='<h3>Sessions by Model</h3><canvas id="xm2" height="180"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Output by Model</h3><canvas id="xm3" height="180"></canvas>';g.appendChild(c2);
+  s.appendChild(g);
+  const ms=D.models[0]?.sessions||1;
+  new Chart(document.getElementById('xm2'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.sessions),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false}}}}});
+  new Chart(document.getElementById('xm3'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.output),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmt(v)}},y:{grid:{display:false}}}}});
+  const c3=mkCd();c3.innerHTML='<h3>Token Share</h3><canvas id="xm4" height="200"></canvas>';s.appendChild(c3);
+  new Chart(document.getElementById('xm4'),{type:'doughnut',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.input+m.cache+m.output),backgroundColor:CL,borderWidth:0}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Model','Sess','Input (cache)','Output','Active','Share',''],
+    D.models.map(m=>{const t=(m.input||0)+(m.cache||0)+(m.output||0);return[m.name,m.sessions,fc(m.input||0,m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',pct(t,tot(D.models.map(x=>(x.input||0)+(x.cache||0)+(x.output||0)),0)).toFixed(1)+'%',bar(m.sessions,ms,40,C.ac)]})));
+}
+
+function buildProjects(){
+  const s=document.getElementById('p-projects');
+  const c=mkCd('w');c.innerHTML='<h3>Sessions by Project</h3><canvas id="xp1" height="220"></canvas>';s.appendChild(c);
+  new Chart(document.getElementById('xp1'),{type:'bar',data:{labels:D.projects.map(p=>p.name.split('/').slice(-2).join('/')),datasets:[{data:D.projects.map(p=>p.sessions),backgroundColor:C.gn+'bb',borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false},ticks:{font:{size:9}}}}}});
+  const ps=D.projects[0]?.sessions||1;
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Project','Sess','Input (cache)','Output','Active','Top Models',''],
+    D.projects.map(p=>[p.name,p.sessions,fc(p.input,p.cache||0),fmt(p.output),(p.active_h||0).toFixed(1)+'h',(p.top_models||[]).slice(0,3).join(', '),bar(p.sessions,ps,40,C.gn)])));
+}
+
+function buildSessions(){
+  const s=document.getElementById('p-sessions'),ct=mkCd('w');s.appendChild(ct);
+  ct.appendChild(mkST(['#','Project','Model','Total','Input (cache)','Output','Date','Title'],
+    D.top.map((s,i)=>{const t=(s.input||0)+(s.output||0)+(s.cache||0);return[i+1,s.project.split('/').slice(-2).join('/'),s.model,fmt(t),fc(s.input||0,s.cache||0),fmt(s.output||0),s.date,s.title]}),
+    [0,1,2,3,4,5,6,7]));
+}
+
+function buildHeatmap(){
+  const s=document.getElementById('p-heatmap'),g=document.createElement('div');g.className='g2';
+  const c1=mkCd();c1.innerHTML='<h3>Hourly Distribution</h3><canvas id="xh1" height="160"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Day of Week</h3><canvas id="xh2" height="160"></canvas>';g.appendChild(c2);
+  s.appendChild(g);
+  const hl=Array.from({length:24},(_,i)=>i);
+  const hd=hl.map(h=>{const f=D.hourly.find(x=>x.hour===h);return f?f.sessions:0});
+  new Chart(document.getElementById('xh1'),{type:'bar',data:{labels:hl.map(h=>h+'h'),datasets:[{data:hd,backgroundColor:C.or+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
+  const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dd=Array.from({length:7},(_,i)=>{const f=D.dow.find(x=>x.dow===i);return f?f.sessions:0});
+  new Chart(document.getElementById('xh2'),{type:'bar',data:{labels:dn,datasets:[{data:dd,backgroundColor:C.pr+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
+  const c3=mkCd('w');c3.innerHTML='<h3>Session Length Distribution</h3><canvas id="xh3" height="160"></canvas>';s.appendChild(c3);
+  const bins=['0-1m','1-5m','5-15m','15-30m','30m-1h','1h+'];
+  const bcounts=[0,0,0,0,0,0];
+  D.top.forEach(s=>{
+    const h=((s.cache||0)+(s.input||0)+(s.output||0))/1e6;
+    if(h<.01)bcounts[0]++;else if(h<.1)bcounts[1]++;else if(h<1)bcounts[2]++;else if(h<10)bcounts[3]++;else if(h<100)bcounts[4]++;else bcounts[5]++;
+  });
+  new Chart(document.getElementById('xh3'),{type:'bar',data:{labels:bins,datasets:[{data:bcounts,backgroundColor:C.ac+'77',borderRadius:3}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
+}
+
+init();
+</script>
+</body>
+</html>
