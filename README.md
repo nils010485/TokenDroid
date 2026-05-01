@@ -16,7 +16,7 @@ usage, and project activity.
 ```bash
 git clone https://github.com/nils010485/TokenDroid.git
 cd TokenDroid
-uv sync
+uv tool install .
 tokendroid sync
 tokendroid stat overview
 ```
