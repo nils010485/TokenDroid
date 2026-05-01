@@ -10,7 +10,13 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ..db import get_global_stats, get_monthly_stats, get_sessions, get_top_sessions, get_weekly_stats
+from ..db import (
+    get_global_stats,
+    get_monthly_stats,
+    get_sessions,
+    get_top_sessions,
+    get_weekly_stats,
+)
 from .utils import (
     COLOR_ACCENT,
     COLOR_DIM,
