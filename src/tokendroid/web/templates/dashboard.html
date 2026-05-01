@@ -144,7 +144,8 @@ function buildKPIs(){
   const items=[
     ['Sessions',ts.toLocaleString(),'var(--blue)'],
     ['Total Tokens',fmt(tt),'var(--accent)'],
-    ['Input (cache)',fc(ti,tc),'var(--green)'],
+    ['Input',fmt(ti),'var(--green)'],
+    ['Cache',fmt(tc),'var(--green)'],
     ['Output',fmt(to),'var(--teal)'],
     ['Active',ta.toFixed(1)+'h','var(--purple)'],
     ['Messages',tm.toLocaleString(),'var(--yellow)'],
@@ -206,8 +207,8 @@ function buildDaily(){
     {label:'Output',data:D.daily.map(d=>d.output),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  const mx=tot(D.daily,'sessions');
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input (cache)','Output','Active','Msgs','Sessions'],
-    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fc(d.input,d.cache),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Output','Active','Msgs','Sessions'],
+    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
 }
 
 function buildWeekly(){
@@ -221,8 +222,8 @@ function buildWeekly(){
     {label:'Output',data:wl.map(w=>ws[w].o),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   const mx=Math.max(...wl.map(w=>ws[w].s));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input (cache)','Output','Active','Msgs',''],
-    wl.slice().reverse().map(w=>[w,ws[w].s,fc(ws[w].i,ws[w].c),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Output','Active','Msgs',''],
+    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
 }
 
 function buildMonthly(){
@@ -233,8 +234,8 @@ function buildMonthly(){
     {label:'Output',data:D.monthly.map(m=>m.output),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   const mx=Math.max(...D.monthly.map(m=>m.sessions));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input (cache)','Output','Active','Msgs',''],
-    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fc(m.input,m.cache),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Output','Active','Msgs',''],
+    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
 }
 
 function buildTimeline(){
@@ -270,8 +271,8 @@ function buildModels(){
   new Chart(document.getElementById('xm3'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.output),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmt(v)}},y:{grid:{display:false}}}}});
   const c3=mkCd();c3.innerHTML='<h3>Token Share</h3><canvas id="xm4" height="200"></canvas>';s.appendChild(c3);
   new Chart(document.getElementById('xm4'),{type:'doughnut',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.input+m.cache+m.output),backgroundColor:CL,borderWidth:0}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Model','Sess','Input (cache)','Output','Active','Share',''],
-    D.models.map(m=>{const t=(m.input||0)+(m.cache||0)+(m.output||0);return[m.name,m.sessions,fc(m.input||0,m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',pct(t,tot(D.models.map(x=>(x.input||0)+(x.cache||0)+(x.output||0)),0)).toFixed(1)+'%',bar(m.sessions,ms,40,C.ac)]})));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Model','Sess','Input','Cache','Output','Active','Share',''],
+    D.models.map(m=>{const t=(m.input||0)+(m.cache||0)+(m.output||0);return[m.name,m.sessions,fmt(m.input||0),fmt(m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',pct(t,tot(D.models.map(x=>(x.input||0)+(x.cache||0)+(x.output||0)),0)).toFixed(1)+'%',bar(m.sessions,ms,40,C.ac)]})));
 }
 
 function buildProjects(){
@@ -279,14 +280,14 @@ function buildProjects(){
   const c=mkCd('w');c.innerHTML='<h3>Sessions by Project</h3><canvas id="xp1" height="220"></canvas>';s.appendChild(c);
   new Chart(document.getElementById('xp1'),{type:'bar',data:{labels:D.projects.map(p=>p.name.split('/').slice(-2).join('/')),datasets:[{data:D.projects.map(p=>p.sessions),backgroundColor:C.gn+'bb',borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false},ticks:{font:{size:9}}}}}});
   const ps=D.projects[0]?.sessions||1;
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Project','Sess','Input (cache)','Output','Active','Top Models',''],
-    D.projects.map(p=>[p.name,p.sessions,fc(p.input,p.cache||0),fmt(p.output),(p.active_h||0).toFixed(1)+'h',(p.top_models||[]).slice(0,3).join(', '),bar(p.sessions,ps,40,C.gn)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Project','Sess','Input','Cache','Output','Active','Top Models',''],
+    D.projects.map(p=>[p.name,p.sessions,fmt(p.input),fmt(p.cache||0),fmt(p.output),(p.active_h||0).toFixed(1)+'h',(p.top_models||[]).slice(0,3).join(', '),bar(p.sessions,ps,40,C.gn)])));
 }
 
 function buildSessions(){
   const s=document.getElementById('p-sessions'),ct=mkCd('w');s.appendChild(ct);
-  ct.appendChild(mkST(['#','Project','Model','Total','Input (cache)','Output','Date','Title'],
-    D.top.map((s,i)=>{const t=(s.input||0)+(s.output||0)+(s.cache||0);return[i+1,s.project.split('/').slice(-2).join('/'),s.model,fmt(t),fc(s.input||0,s.cache||0),fmt(s.output||0),s.date,s.title]}),
+  ct.appendChild(mkST(['#','Project','Model','Total','Input','Cache','Output','Date','Title'],
+    D.top.map((s,i)=>{const t=(s.input||0)+(s.output||0)+(s.cache||0);return[i+1,s.project.split('/').slice(-2).join('/'),s.model,fmt(t),fmt(s.input||0),fmt(s.cache||0),fmt(s.output||0),s.date,s.title]}),
     [0,1,2,3,4,5,6,7]));
 }
 
