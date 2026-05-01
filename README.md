@@ -7,7 +7,9 @@ usage, and project activity.
 
 > **Note:** This project is not affiliated with [Factory](https://factory.ai/).
 
-![Dashboard](docs/dashboard.png)
+![Web Dashboard](docs/dashboard.png)
+
+![CLI Overview](docs/cli.png)
 
 ---
 
