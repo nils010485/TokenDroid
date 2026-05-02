@@ -132,7 +132,7 @@ def tui() -> None:
 
 @cli.command()
 @click.option("--host", default="127.0.0.1", help="Bind host")
-@click.option("--port", default=8080, type=int, help="Bind port")
+@click.option("--port", default=0, type=int, help="Bind port (0=random)")
 @click.option("--no-open", is_flag=True, help="Don't open browser")
 def web(host: str, port: int, no_open: bool) -> None:
     """Launch web dashboard."""

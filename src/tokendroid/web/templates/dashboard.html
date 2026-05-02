@@ -123,6 +123,7 @@ function fmt(n){if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).t
 function fc(i,c){return c?fmt(i)+' <span class="sub">('+fmt(c)+')</span>':fmt(i)}
 function tot(a,k){return a.reduce((s,d)=>s+(d[k]||0),0)}
 function pct(p,t){return t?p/Math.max(t,1)*100:0}
+function hitP(c,i){const t=i+c;return t?pct(c,t).toFixed(0)+'%':'-'}
 function bar(v,mx,w=60,c=C.ac){const p=Math.min(v/Math.max(mx,1),1);return `<span class="bar" style="width:${Math.round(p*w)}px;background:${c}"></span>`}
 
 async function load(){
@@ -197,64 +198,77 @@ function wk(d){const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate
 
 function buildDaily(){
   const s=document.getElementById('p-daily'),g=document.createElement('div');g.className='g2';
-  const c1=mkCd('w');c1.innerHTML='<h3>Tokens / Day</h3><canvas id="xd1" height="160"></canvas>';g.appendChild(c1);
-  const c2=mkCd();c2.innerHTML='<h3>Sessions</h3><canvas id="xd2" height="160"></canvas>';g.appendChild(c2);
-  const c3=mkCd();c3.innerHTML='<h3>Active Hours</h3><canvas id="xd3" height="160"></canvas>';g.appendChild(c3);
+  const c1=mkCd('w');c1.innerHTML='<h3>Tokens / Day</h3><canvas id="xd1" height="140"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Sessions</h3><canvas id="xd2" height="140"></canvas>';g.appendChild(c2);
+  const c3=mkCd();c3.innerHTML='<h3>Active Hours</h3><canvas id="xd3" height="140"></canvas>';g.appendChild(c3);
   s.appendChild(g);
   const dl=D.daily.map(d=>d.date);
   new Chart(document.getElementById('xd1'),{type:'line',data:{labels:dl,datasets:[
     {label:'Input',data:D.daily.map(d=>d.input),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
+    {label:'Cache',data:D.daily.map(d=>d.cache||0),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
     {label:'Output',data:D.daily.map(d=>d.output),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
-  new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  const mx=tot(D.daily,'sessions');
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Output','Active','Msgs','Sessions'],
-    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
+  new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});
+  const c4=mkCd();c4.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xd4" height="140"></canvas>';g.appendChild(c4);
+  new Chart(document.getElementById('xd4'),{type:'line',data:{labels:dl,datasets:[{label:'Cache %',data:D.daily.map(d=>{const t=d.input+(d.cache||0);return t?((d.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+  const mx=tot(D.daily,'sessions');
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Hit%','Output','Active','Msgs','Sessions'],
+    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),hitP(d.cache||0,d.input),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
 }
 
 function buildWeekly(){
-  const s=document.getElementById('p-weekly');
+  const s=document.getElementById('p-weekly'),g=document.createElement('div');g.className='g2';
   const ws={};
   D.daily.forEach(d=>{const k=wk(new Date(d.date));if(!ws[k])ws[k]={s:0,i:0,o:0,c:0,a:0,m:0};const w=ws[k];w.s+=d.sessions;w.i+=d.input;w.o+=d.output;w.c+=d.cache||0;w.a+=d.active_h;w.m+=d.messages});
   const wl=Object.keys(ws).sort();
-  const c=mkCd('w');c.innerHTML='<h3>Weekly Tokens</h3><canvas id="xw1" height="160"></canvas>';s.appendChild(c);
+  const c1=mkCd();c1.innerHTML='<h3>Weekly Tokens</h3><canvas id="xw1" height="140"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xw2" height="140"></canvas>';g.appendChild(c2);
+  s.appendChild(g);
   new Chart(document.getElementById('xw1'),{type:'bar',data:{labels:wl,datasets:[
     {label:'Input',data:wl.map(w=>ws[w].i),backgroundColor:C.gn+'77',borderRadius:3},
+    {label:'Cache',data:wl.map(w=>ws[w].c),backgroundColor:C.yl+'77',borderRadius:3},
     {label:'Output',data:wl.map(w=>ws[w].o),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  new Chart(document.getElementById('xw2'),{type:'line',data:{labels:wl,datasets:[{label:'Cache %',data:wl.map(w=>{const t=ws[w].i+ws[w].c;return t?(ws[w].c/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
   const mx=Math.max(...wl.map(w=>ws[w].s));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Output','Active','Msgs',''],
-    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
+    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),hitP(ws[w].c,ws[w].i),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
 }
 
 function buildMonthly(){
-  const s=document.getElementById('p-monthly');
-  const c=mkCd('w');c.innerHTML='<h3>Monthly Tokens</h3><canvas id="xm1" height="160"></canvas>';s.appendChild(c);
+  const s=document.getElementById('p-monthly'),g=document.createElement('div');g.className='g2';
+  const c1=mkCd('w');c1.innerHTML='<h3>Monthly Tokens</h3><canvas id="xm1" height="140"></canvas>';g.appendChild(c1);
+  const c2=mkCd('w');c2.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xmc" height="140"></canvas>';g.appendChild(c2);
+  s.appendChild(g);
   new Chart(document.getElementById('xm1'),{type:'bar',data:{labels:D.monthly.map(m=>m.month),datasets:[
     {label:'Input',data:D.monthly.map(m=>m.input),backgroundColor:C.gn+'77',borderRadius:3},
+    {label:'Cache',data:D.monthly.map(m=>m.cache||0),backgroundColor:C.yl+'77',borderRadius:3},
     {label:'Output',data:D.monthly.map(m=>m.output),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  new Chart(document.getElementById('xmc'),{type:'line',data:{labels:D.monthly.map(m=>m.month),datasets:[{label:'Cache %',data:D.monthly.map(m=>{const t=m.input+(m.cache||0);return t?((m.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
   const mx=Math.max(...D.monthly.map(m=>m.sessions));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Output','Active','Msgs',''],
-    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
+    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),hitP(m.cache||0,m.input),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
 }
 
 function buildTimeline(){
   const s=document.getElementById('p-timeline');
-  const c=mkCd('w');c.innerHTML='<h3>Model Usage Over Time</h3><canvas id="xt1" height="160"></canvas>';s.appendChild(c);
+  const c=mkCd('w');c.innerHTML='<h3>Model Usage Over Time</h3><canvas id="xt1" height="140"></canvas>';s.appendChild(c);
   const modelDays={};
   D.top.forEach(s=>{
     if(!s.date)return;
     const mk=s.model;
     if(!modelDays[mk])modelDays[mk]={};
-    if(!modelDays[mk][s.date])modelDays[mk][s.date]={i:0,o:0};
+    if(!modelDays[mk][s.date])modelDays[mk][s.date]={i:0,c:0,o:0};
     modelDays[mk][s.date].i+=s.input||0;
+    modelDays[mk][s.date].c+=s.cache||0;
     modelDays[mk][s.date].o+=s.output||0;
   });
   const allDates=[...new Set(D.top.map(s=>s.date).filter(Boolean))].sort();
   const topModels=D.models.slice(0,6).map(m=>m.name);
   new Chart(document.getElementById('xt1'),{type:'line',data:{labels:allDates,datasets:topModels.map((mk,i)=>({
     label:mk.length>20?mk.slice(0,20)+'...':mk,
-    data:allDates.map(d=>(modelDays[mk]&&modelDays[mk][d])?modelDays[mk][d].o:0),
+    data:allDates.map(d=>(modelDays[mk]&&modelDays[mk][d])?(modelDays[mk][d].i+(modelDays[mk][d].c||0)):0),
     borderColor:CL[i%CL.length],
     backgroundColor:CL[i%CL.length]+'10',
     fill:false,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2
@@ -263,25 +277,27 @@ function buildTimeline(){
 
 function buildModels(){
   const s=document.getElementById('p-models'),g=document.createElement('div');g.className='g2';
-  const c1=mkCd();c1.innerHTML='<h3>Sessions by Model</h3><canvas id="xm2" height="180"></canvas>';g.appendChild(c1);
-  const c2=mkCd();c2.innerHTML='<h3>Output by Model</h3><canvas id="xm3" height="180"></canvas>';g.appendChild(c2);
+  const c1=mkCd();c1.innerHTML='<h3>Sessions by Model</h3><canvas id="xms" height="160"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Output by Model</h3><canvas id="xmo" height="160"></canvas>';g.appendChild(c2);
+  const c3=mkCd();c3.innerHTML='<h3>Cache Hit %</h3><canvas id="xmh"></canvas>';g.appendChild(c3);
+  const c4=mkCd();c4.innerHTML='<h3>Token Share</h3><canvas id="xm4"></canvas>';g.appendChild(c4);
   s.appendChild(g);
   const ms=D.models[0]?.sessions||1;
-  new Chart(document.getElementById('xm2'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.sessions),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false}}}}});
-  new Chart(document.getElementById('xm3'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.output),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmt(v)}},y:{grid:{display:false}}}}});
-  const c3=mkCd();c3.innerHTML='<h3>Token Share</h3><canvas id="xm4" height="200"></canvas>';s.appendChild(c3);
-  new Chart(document.getElementById('xm4'),{type:'doughnut',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.input+m.cache+m.output),backgroundColor:CL,borderWidth:0}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Model','Sess','Input','Cache','Output','Active','Share',''],
-    D.models.map(m=>{const t=(m.input||0)+(m.cache||0)+(m.output||0);return[m.name,m.sessions,fmt(m.input||0),fmt(m.cache||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',pct(t,tot(D.models.map(x=>(x.input||0)+(x.cache||0)+(x.output||0)),0)).toFixed(1)+'%',bar(m.sessions,ms,40,C.ac)]})));
+  new Chart(document.getElementById('xms'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.sessions),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false}}}}});
+  new Chart(document.getElementById('xmo'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.output),backgroundColor:CL,borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmt(v)}},y:{grid:{display:false}}}}});
+  new Chart(document.getElementById('xmh'),{type:'bar',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>{const t=(m.input||0)+(m.cache||0);return t?((m.cache||0)/t*100).toFixed(1):0}),backgroundColor:C.yl+'aa',borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}},y:{grid:{display:false}}}}});
+  new Chart(document.getElementById('xm4'),{type:'doughnut',data:{labels:D.models.map(m=>m.name),datasets:[{data:D.models.map(m=>m.input+m.cache+m.output),backgroundColor:CL,borderWidth:0}]},options:{aspectRatio:1.4,plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Model','Sess','Input','Cache','Hit%','Output','Active','Share',''],
+    D.models.map(m=>{const t=(m.input||0)+(m.cache||0)+(m.output||0);return[m.name,m.sessions,fmt(m.input||0),fmt(m.cache||0),hitP(m.cache||0,m.input||0),fmt(m.output),(m.active_h||0).toFixed(1)+'h',pct(t,tot(D.models.map(x=>(x.input||0)+(x.cache||0)+(x.output||0)),0)).toFixed(1)+'%',bar(m.sessions,ms,40,C.ac)]})));
 }
 
 function buildProjects(){
   const s=document.getElementById('p-projects');
-  const c=mkCd('w');c.innerHTML='<h3>Sessions by Project</h3><canvas id="xp1" height="220"></canvas>';s.appendChild(c);
+  const c=mkCd('w');c.innerHTML='<h3>Sessions by Project</h3><canvas id="xp1" height="140"></canvas>';s.appendChild(c);
   new Chart(document.getElementById('xp1'),{type:'bar',data:{labels:D.projects.map(p=>p.name.split('/').slice(-2).join('/')),datasets:[{data:D.projects.map(p=>p.sessions),backgroundColor:C.gn+'bb',borderRadius:3}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:GC}},y:{grid:{display:false},ticks:{font:{size:9}}}}}});
   const ps=D.projects[0]?.sessions||1;
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Project','Sess','Input','Cache','Output','Active','Top Models',''],
-    D.projects.map(p=>[p.name,p.sessions,fmt(p.input),fmt(p.cache||0),fmt(p.output),(p.active_h||0).toFixed(1)+'h',(p.top_models||[]).slice(0,3).join(', '),bar(p.sessions,ps,40,C.gn)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Project','Sess','Input','Cache','Hit%','Output','Active','Top Models',''],
+    D.projects.map(p=>[p.name,p.sessions,fmt(p.input),fmt(p.cache||0),hitP(p.cache||0,p.input),fmt(p.output),(p.active_h||0).toFixed(1)+'h',(p.top_models||[]).slice(0,3).join(', '),bar(p.sessions,ps,40,C.gn)])));
 }
 
 function buildSessions(){
@@ -293,8 +309,8 @@ function buildSessions(){
 
 function buildHeatmap(){
   const s=document.getElementById('p-heatmap'),g=document.createElement('div');g.className='g2';
-  const c1=mkCd();c1.innerHTML='<h3>Hourly Distribution</h3><canvas id="xh1" height="160"></canvas>';g.appendChild(c1);
-  const c2=mkCd();c2.innerHTML='<h3>Day of Week</h3><canvas id="xh2" height="160"></canvas>';g.appendChild(c2);
+  const c1=mkCd();c1.innerHTML='<h3>Hourly Distribution</h3><canvas id="xh1" height="140"></canvas>';g.appendChild(c1);
+  const c2=mkCd();c2.innerHTML='<h3>Day of Week</h3><canvas id="xh2" height="140"></canvas>';g.appendChild(c2);
   s.appendChild(g);
   const hl=Array.from({length:24},(_,i)=>i);
   const hd=hl.map(h=>{const f=D.hourly.find(x=>x.hour===h);return f?f.sessions:0});
@@ -302,7 +318,7 @@ function buildHeatmap(){
   const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const dd=Array.from({length:7},(_,i)=>{const f=D.dow.find(x=>x.dow===i);return f?f.sessions:0});
   new Chart(document.getElementById('xh2'),{type:'bar',data:{labels:dn,datasets:[{data:dd,backgroundColor:C.pr+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
-  const c3=mkCd('w');c3.innerHTML='<h3>Session Length Distribution</h3><canvas id="xh3" height="160"></canvas>';s.appendChild(c3);
+  const c3=mkCd();c3.innerHTML='<h3>Session Length Distribution</h3><canvas id="xh3" height="140"></canvas>';s.appendChild(c3);
   const bins=['0-1m','1-5m','5-15m','15-30m','30m-1h','1h+'];
   const bcounts=[0,0,0,0,0,0];
   D.top.forEach(s=>{

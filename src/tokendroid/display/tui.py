@@ -86,13 +86,16 @@ class DailyWidget(Static):
 
         daily_out = [d.output_tokens for d in stats.by_day]
         daily_in = [d.input_tokens for d in stats.by_day]
+        daily_cache = [d.cache_tokens for d in stats.by_day]
 
         lines.append(f"  Output tokens: {sparkline(daily_out)}")
         lines.append(f"  Input tokens:  {sparkline(daily_in)}")
+        lines.append(f"  Cache tokens:  {sparkline(daily_cache)}")
         lines.append("")
 
         lines.append(
-            f"  {'Date':<12} {'Sess':>5} {'Input':>10} {'Output':>10} {'Active':>8} {'Msgs':>6}"
+            f"  {'Date':<12} {'Sess':>5} {'Input':>10} "
+            f"{'Cache':>10} {'Output':>10} {'Active':>8} {'Msgs':>6}"
         )
         lines.append(f"  {'─' * 55}")
 
@@ -100,6 +103,7 @@ class DailyWidget(Static):
             lines.append(
                 f"  {d.date:<12} {d.sessions:>5} "
                 f"{fmt_tokens(d.input_tokens):>10} "
+                f"{fmt_tokens(d.cache_tokens):>10} "
                 f"{fmt_tokens(d.output_tokens):>10} "
                 f"{fmt_duration(d.active_time_ms):>8} {d.messages:>6}"
             )
@@ -128,6 +132,7 @@ class ModelWidget(Static):
                 f"    {m.sessions:>4} sess | "
                 f"{fmt_tokens(m.output_tokens):>8} out | "
                 f"{fmt_tokens(m.input_tokens):>8} in | "
+                f"{fmt_tokens(m.cache_tokens):>8} cache | "
                 f"{fmt_duration(m.active_time_ms):>6} active\n"
                 f"    {bar}"
             )
@@ -157,6 +162,7 @@ class ProjectWidget(Static):
                 f"    {p.sessions:>4} sess | "
                 f"{fmt_tokens(p.output_tokens):>8} out | "
                 f"{fmt_tokens(p.input_tokens):>8} in | "
+                f"{fmt_tokens(p.cache_tokens):>8} cache | "
                 f"{fmt_duration(p.active_time_ms):>6} active\n"
                 f"    [dim]Models: {models_str}[/]\n"
                 f"    {bar}"
@@ -179,14 +185,18 @@ class WeekWidget(Static):
 
         max_sessions = max(w["sessions"] for w in weekly) or 1
 
-        lines.append(f"  {'Week':<10} {'Sess':>5} {'Input':>10} {'Output':>10} {'Active':>8}")
-        lines.append(f"  {'─' * 50}")
+        lines.append(
+            f"  {'Week':<10} {'Sess':>5} {'Input':>10} "
+            f"{'Cache':>10} {'Output':>10} {'Active':>8}"
+        )
+        lines.append(f"  {'─' * 60}")
 
         for w in weekly:
             bar_len = min(int(w["sessions"] / max_sessions * 30), 30)
             bar = f"[{COLOR_MAUVE}]{'█' * bar_len}[/{COLOR_MAUVE}]"
             lines.append(
                 f"  {w['week']:<10} {w['sessions']:>5} {fmt_tokens(w['input_tokens']):>10} "
+                f"{fmt_tokens(w.get('cache_tokens', 0) or 0):>10} "
                 f"{fmt_tokens(w['output_tokens']):>10} {fmt_duration(w['active_time_ms']):>8}"
             )
             lines.append(f"  {bar}")

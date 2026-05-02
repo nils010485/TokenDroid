@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import socket
+import threading
+import time
 import webbrowser
 from pathlib import Path
 
@@ -186,16 +189,23 @@ async def api_sync():
     return JSONResponse({"synced": count})
 
 
-def run_web(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = True) -> None:
+def _find_free_port(host: str = "127.0.0.1") -> int:
+    """Ask the OS for a free port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def run_web(host: str = "127.0.0.1", port: int = 0, open_browser: bool = True) -> None:
     import uvicorn
+
+    if port == 0:
+        port = _find_free_port(host)
 
     if open_browser:
         url = f"http://{host}:{port}"
-        import threading
 
         def _open():
-            import time
-
             time.sleep(1.5)
             webbrowser.open(url)
 
