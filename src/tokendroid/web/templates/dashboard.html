@@ -169,12 +169,14 @@ const ICONS={
 };
 function buildTabs(){
   const nav=document.getElementById('tabs'),ps=document.getElementById('panes');
+  const cur=nav.querySelector('.nav-item.on')?.dataset?.tab||TABS[0].id;
   nav.innerHTML='';ps.innerHTML='';
   TABS.forEach((t,i)=>{
-    const b=document.createElement('button');b.className='nav-item'+(i===0?' on':'');b.innerHTML='<span class="nav-icon">'+ICONS[t.id]+'</span><span class="nav-label">'+t.l+'</span>';
+    const on=t.id===cur;
+    const b=document.createElement('button');b.className='nav-item'+(on?' on':'');b.dataset.tab=t.id;b.innerHTML='<span class="nav-icon">'+ICONS[t.id]+'</span><span class="nav-label">'+t.l+'</span>';
     b.onclick=()=>{nav.querySelectorAll('.nav-item').forEach(x=>x.className='nav-item');b.className='nav-item on';ps.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));document.getElementById('p-'+t.id).classList.add('on')};
     nav.appendChild(b);
-    const p=document.createElement('div');p.className='pane'+(i===0?' on':'');p.id='p-'+t.id;ps.appendChild(p);
+    const p=document.createElement('div');p.className='pane'+(on?' on':'');p.id='p-'+t.id;ps.appendChild(p);
   });
 }
 function mkCd(cls){const d=document.createElement('div');d.className='cd'+(cls?' '+cls:'');return d}
