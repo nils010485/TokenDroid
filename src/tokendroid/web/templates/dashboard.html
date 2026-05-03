@@ -395,6 +395,25 @@ function buildCost(){
   strip.innerHTML=items.map(([l,v,c])=>`<div class="cost-item" style="--ci-color:${c}"><div><div class="ci-lbl">${l}</div><div class="ci-val">${v}</div></div></div>`).join('');
   s.appendChild(strip);
 
+  const now=new Date();
+  const dl=cd.daily||[];
+  const today=now.toISOString().slice(0,10);
+  const _sumDays=function(from){
+    const cut=new Date(now);cut.setDate(cut.getDate()-from);
+    const cs=dl.filter(function(d){return new Date(d.date)>=cut});
+    return cs.reduce(function(a,d){return a+d.total_cost},0);
+  };
+  const todayCost=(dl.find(function(d){return d.date===today})||{}).total_cost||0;
+  const quick=[
+    ['Today',todayCost,'var(--pink)'],
+    ['Last 7d',_sumDays(7),'var(--teal)'],
+    ['Last 30d',_sumDays(30),'var(--green)'],
+    ['Last 90d',_sumDays(90),'var(--orange)'],
+  ];
+  const qs=document.createElement('div');qs.className='cost-strip';
+  qs.innerHTML=quick.map(function(x){return '<div class="cost-item" style="--ci-color:'+x[2]+'"><div><div class="ci-lbl">'+x[0]+'</div><div class="ci-val">'+fmtUSD(x[1])+'</div></div></div>'}).join('');
+  s.appendChild(qs);
+
   const g=document.createElement('div');g.className='g2';
   const c1=mkCd('w');
   c1.innerHTML='<h3>Cost Timeline by Model</h3><div class="cost-ctrl"><div class="cost-period" id="cperiod"></div><div class="cost-models" id="cmodels"></div></div><div style="position:relative;height:320px"><canvas id="xc1"></canvas></div>';
