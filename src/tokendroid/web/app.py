@@ -211,4 +211,7 @@ def run_web(host: str = "127.0.0.1", port: int = 0, open_browser: bool = True) -
 
         threading.Thread(target=_open, daemon=True).start()
 
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    try:
+        uvicorn.run(app, host=host, port=port, log_level="warning")
+    except (KeyboardInterrupt, SystemExit):
+        pass
