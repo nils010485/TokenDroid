@@ -543,6 +543,28 @@ def display_cost(
     console.print(Columns(cards, equal=True, expand=True))
     console.print()
 
+    dl = data["daily"]
+    from datetime import date, timedelta
+
+    today_s = date.today().isoformat()
+    today_cost = next((d["total_cost"] for d in dl if d["date"] == today_s), 0.0)
+    td = date.today()
+    d7 = sum(d["total_cost"] for d in dl if date.fromisoformat(d["date"]) >= td - timedelta(days=7))
+    d30 = sum(
+        d["total_cost"] for d in dl if date.fromisoformat(d["date"]) >= td - timedelta(days=30)
+    )
+    d90 = sum(
+        d["total_cost"] for d in dl if date.fromisoformat(d["date"]) >= td - timedelta(days=90)
+    )
+    quick = [
+        _cost_card("Today", fmt_cost(today_cost), COLOR_RED),
+        _cost_card("Last 7d", fmt_cost(d7), COLOR_TEAL),
+        _cost_card("Last 30d", fmt_cost(d30), COLOR_GREEN),
+        _cost_card("Last 90d", fmt_cost(d90), COLOR_YELLOW),
+    ]
+    console.print(Columns(quick, equal=True, expand=True))
+    console.print()
+
     if breakdown == "model" or breakdown is None:
         t = Table(
             title="Cost by Model",
@@ -568,6 +590,15 @@ def display_cost(
                 fmt_cost(m["total_cost"]),
                 matched_str,
             )
+        t.add_row(
+            "[bold]TOTAL[/]",
+            fmt_cost(sum(m["input_cost"] for m in data["by_model"])),
+            fmt_cost(sum(m["output_cost"] for m in data["by_model"])),
+            fmt_cost(sum(m["cache_cost"] for m in data["by_model"])),
+            fmt_cost(sum(m["reasoning_cost"] for m in data["by_model"])),
+            fmt_cost(sum(m["total_cost"] for m in data["by_model"])),
+            "",
+        )
         console.print(t)
         console.print()
 
@@ -583,6 +614,7 @@ def display_cost(
         t.add_column("Input", justify="right", style=COLOR_GREEN)
         t.add_column("Output", justify="right", style=COLOR_TEAL)
         t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        t.add_column("Reasoning", justify="right", style=COLOR_RED)
         for p in data["by_project"]:
             if p["total_cost"] == 0:
                 continue
@@ -592,6 +624,17 @@ def display_cost(
                 fmt_cost(p["input_cost"]),
                 fmt_cost(p["output_cost"]),
                 fmt_cost(p["cache_cost"]),
+                fmt_cost(p["reasoning_cost"]),
+            )
+        if t.row_count:
+            active_p = [p for p in data["by_project"] if p["total_cost"] > 0]
+            t.add_row(
+                "[bold]TOTAL[/]",
+                fmt_cost(sum(p["total_cost"] for p in active_p)),
+                fmt_cost(sum(p["input_cost"] for p in active_p)),
+                fmt_cost(sum(p["output_cost"] for p in active_p)),
+                fmt_cost(sum(p["cache_cost"] for p in active_p)),
+                fmt_cost(sum(p["reasoning_cost"] for p in active_p)),
             )
         if t.row_count:
             console.print(t)
@@ -609,6 +652,7 @@ def display_cost(
         t.add_column("Input", justify="right", style=COLOR_GREEN)
         t.add_column("Output", justify="right", style=COLOR_TEAL)
         t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        t.add_column("Reasoning", justify="right", style=COLOR_RED)
         for d in reversed(data["daily"]):
             if d["total_cost"] == 0:
                 continue
@@ -618,6 +662,17 @@ def display_cost(
                 fmt_cost(d["input_cost"]),
                 fmt_cost(d["output_cost"]),
                 fmt_cost(d["cache_cost"]),
+                fmt_cost(d["reasoning_cost"]),
+            )
+        if t.row_count:
+            active_d = [d for d in data["daily"] if d["total_cost"] > 0]
+            t.add_row(
+                "[bold]TOTAL[/]",
+                fmt_cost(sum(d["total_cost"] for d in active_d)),
+                fmt_cost(sum(d["input_cost"] for d in active_d)),
+                fmt_cost(sum(d["output_cost"] for d in active_d)),
+                fmt_cost(sum(d["cache_cost"] for d in active_d)),
+                fmt_cost(sum(d["reasoning_cost"] for d in active_d)),
             )
         if t.row_count:
             console.print(t)
@@ -634,6 +689,8 @@ def display_cost(
         t.add_column("Total", justify="right", style=COLOR_YELLOW)
         t.add_column("Input", justify="right", style=COLOR_GREEN)
         t.add_column("Output", justify="right", style=COLOR_TEAL)
+        t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        t.add_column("Reasoning", justify="right", style=COLOR_RED)
         for w in data["weekly"]:
             if w["total_cost"] == 0:
                 continue
@@ -642,10 +699,19 @@ def display_cost(
                 fmt_cost(w["total_cost"]),
                 fmt_cost(w["input_cost"]),
                 fmt_cost(w["output_cost"]),
+                fmt_cost(w["cache_cost"]),
+                fmt_cost(w["reasoning_cost"]),
             )
         if t.row_count:
-            console.print(t)
-            console.print()
+            active_w = [w for w in data["weekly"] if w["total_cost"] > 0]
+            t.add_row(
+                "[bold]TOTAL[/]",
+                fmt_cost(sum(w["total_cost"] for w in active_w)),
+                fmt_cost(sum(w["input_cost"] for w in active_w)),
+                fmt_cost(sum(w["output_cost"] for w in active_w)),
+                fmt_cost(sum(w["cache_cost"] for w in active_w)),
+                fmt_cost(sum(w["reasoning_cost"] for w in active_w)),
+            )
 
     if breakdown == "month":
         t = Table(
@@ -658,6 +724,8 @@ def display_cost(
         t.add_column("Total", justify="right", style=COLOR_YELLOW)
         t.add_column("Input", justify="right", style=COLOR_GREEN)
         t.add_column("Output", justify="right", style=COLOR_TEAL)
+        t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        t.add_column("Reasoning", justify="right", style=COLOR_RED)
         for mo in data["monthly"]:
             if mo["total_cost"] == 0:
                 continue
@@ -666,6 +734,18 @@ def display_cost(
                 fmt_cost(mo["total_cost"]),
                 fmt_cost(mo["input_cost"]),
                 fmt_cost(mo["output_cost"]),
+                fmt_cost(mo["cache_cost"]),
+                fmt_cost(mo["reasoning_cost"]),
+            )
+        if t.row_count:
+            active_mo = [mo for mo in data["monthly"] if mo["total_cost"] > 0]
+            t.add_row(
+                "[bold]TOTAL[/]",
+                fmt_cost(sum(mo["total_cost"] for mo in active_mo)),
+                fmt_cost(sum(mo["input_cost"] for mo in active_mo)),
+                fmt_cost(sum(mo["output_cost"] for mo in active_mo)),
+                fmt_cost(sum(mo["cache_cost"] for mo in active_mo)),
+                fmt_cost(sum(mo["reasoning_cost"] for mo in active_mo)),
             )
         if t.row_count:
             console.print(t)
