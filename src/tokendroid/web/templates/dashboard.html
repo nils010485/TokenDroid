@@ -204,6 +204,7 @@ function mkST(h,r,num){
   const tb=document.createElement('tbody');r.forEach(row=>{const tr2=document.createElement('tr');tr2.innerHTML=row.map(c=>'<td>'+c+'</td>').join('');tb.appendChild(tr2)});
   t.appendChild(tb);return t;
 }
+function mkSTf(h,r,num,foot){const t=mkST(h,r,num);if(foot){const tf=document.createElement('tfoot');const tr=document.createElement('tr');tr.innerHTML=foot.map(c=>'<td>'+c+'</td>').join('');tf.appendChild(tr);t.appendChild(tf)}return t}
 function doSort(t,col,num){
   const tb=t.querySelector('tbody'),rows=[...tb.querySelectorAll('tr')];
   const asc=t.dataset.sc==col&&t.dataset.sd!=='a';
@@ -236,6 +237,7 @@ function buildDaily(){
       {label:'Output',data:CD.daily.map(d=>d.output_cost),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
       {label:'Cache',data:CD.daily.map(d=>d.cache_cost),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
       {label:'Reasoning',data:CD.daily.map(d=>d.reasoning_cost||0),borderColor:C.pr,backgroundColor:C.pr+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+      {label:'Total',data:CD.daily.map(d=>d.total_cost),borderColor:C.ac,backgroundColor:C.ac+'08',fill:false,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2,borderDash:[4,3]},
     ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:20}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
   }
   const c5=mkCd();c5.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xd5" height="200"></canvas>';g.appendChild(c5);
@@ -393,7 +395,34 @@ function buildCost(){
     {label:'Input',data:dl.map(d=>d.input_cost),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
     {label:'Output',data:dl.map(d=>d.output_cost),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
     {label:'Cache',data:dl.map(d=>d.cache_cost),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+    {label:'Total',data:dl.map(d=>d.total_cost),borderColor:C.ac,backgroundColor:C.ac+'08',fill:false,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2,borderDash:[4,3]},
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:20}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
+
+  if(dl.length){
+    const dtd=mkCd('w');dtd.innerHTML='<h3>Cost / Day</h3>';s.appendChild(dtd);
+    dtd.appendChild(mkSTf(['Date','Input','Output','Cache','Reasoning','Total'],
+      dl.slice().reverse().map(d=>[d.date,fmtUSD(d.input_cost),fmtUSD(d.output_cost),fmtUSD(d.cache_cost),fmtUSD(d.reasoning_cost),fmtUSD(d.total_cost)]),
+      [1,2,3,4,5],
+      ['<b>Total</b>',fmtUSD(dl.reduce((a,d)=>a+d.input_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.output_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.cache_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.reasoning_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.total_cost,0))]));
+  }
+
+  const wl=cd.weekly||[];
+  if(wl.length){
+    const gw=document.createElement('div');gw.className='g2';
+    const cw=mkCd('w');cw.innerHTML='<h3>Weekly Cost</h3><canvas id="xcw" height="280"></canvas>';gw.appendChild(cw);
+    s.appendChild(gw);
+    new Chart(document.getElementById('xcw'),{type:'bar',data:{labels:wl.map(w=>w.week),datasets:[
+      {label:'Input',data:wl.map(w=>w.input_cost),backgroundColor:C.gn+'77',borderRadius:2},
+      {label:'Output',data:wl.map(w=>w.output_cost),backgroundColor:C.tl+'77',borderRadius:2},
+      {label:'Cache',data:wl.map(w=>w.cache_cost),backgroundColor:C.yl+'77',borderRadius:2},
+      {label:'Reasoning',data:wl.map(w=>w.reasoning_cost),backgroundColor:C.pr+'77',borderRadius:2},
+    ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0},stacked:true},y:{grid:{color:GC},stacked:true,ticks:{callback:v=>fmtUSD(v)}}}}});
+    const dtw=mkCd('w');dtw.innerHTML='<h3>Weekly Cost</h3>';s.appendChild(dtw);
+    dtw.appendChild(mkSTf(['Week','Input','Output','Cache','Reasoning','Total'],
+      wl.slice().reverse().map(w=>[w.week,fmtUSD(w.input_cost),fmtUSD(w.output_cost),fmtUSD(w.cache_cost),fmtUSD(w.reasoning_cost),fmtUSD(w.total_cost)]),
+      [1,2,3,4,5],
+      ['<b>Total</b>',fmtUSD(wl.reduce((a,w)=>a+w.input_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.output_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.cache_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.reasoning_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.total_cost,0))]));
+  }
 
   const g2=document.createElement('div');g2.className='g2';
   const c2=mkCd();c2.innerHTML='<h3>Cost by Model</h3><canvas id="xc2" height="260"></canvas>';g2.appendChild(c2);
@@ -407,25 +436,28 @@ function buildCost(){
 
   const mxModel=Math.max(...matched.map(m=>m.total_cost),1);
   const ct1=mkCd('w');ct1.innerHTML='<h3>Cost by Model</h3>';s.appendChild(ct1);
-  ct1.appendChild(mkST(['Model','Input','Output','Cache','Reasoning','Total','Matched',''],
+  ct1.appendChild(mkSTf(['Model','Input','Output','Cache','Reasoning','Total','Matched',''],
     matched.map(m=>[m.name,fmtUSD(m.input_cost),fmtUSD(m.output_cost),fmtUSD(m.cache_cost),fmtUSD(m.reasoning_cost),fmtUSD(m.total_cost),m.matched?'Yes':'No',bar(m.total_cost,mxModel,50,C.ac)]),
-    [1,2,3,4,5]));
+    [1,2,3,4,5],
+    ['<b>Total</b>',fmtUSD(matched.reduce((a,m)=>a+m.input_cost,0)),fmtUSD(matched.reduce((a,m)=>a+m.output_cost,0)),fmtUSD(matched.reduce((a,m)=>a+m.cache_cost,0)),fmtUSD(matched.reduce((a,m)=>a+m.reasoning_cost,0)),fmtUSD(matched.reduce((a,m)=>a+m.total_cost,0)),'','']));
 
   const bp=(cd.by_project||[]).filter(p=>p.total_cost>0);
   if(bp.length){
     const mxP=Math.max(...bp.map(p=>p.total_cost),1);
     const ct2=mkCd('w');ct2.innerHTML='<h3>Cost by Project</h3>';s.appendChild(ct2);
-    ct2.appendChild(mkST(['Project','Input','Output','Cache','Reasoning','Total',''],
+    ct2.appendChild(mkSTf(['Project','Input','Output','Cache','Reasoning','Total',''],
       bp.map(p=>[p.name,fmtUSD(p.input_cost),fmtUSD(p.output_cost),fmtUSD(p.cache_cost),fmtUSD(p.reasoning_cost),fmtUSD(p.total_cost),bar(p.total_cost,mxP,50,C.gn)]),
-      [1,2,3,4,5]));
+      [1,2,3,4,5],
+      ['<b>Total</b>',fmtUSD(bp.reduce((a,p)=>a+p.input_cost,0)),fmtUSD(bp.reduce((a,p)=>a+p.output_cost,0)),fmtUSD(bp.reduce((a,p)=>a+p.cache_cost,0)),fmtUSD(bp.reduce((a,p)=>a+p.reasoning_cost,0)),fmtUSD(bp.reduce((a,p)=>a+p.total_cost,0)),'']));
   }
 
   const mo=cd.monthly||[];
   if(mo.length){
     const ct3=mkCd('w');ct3.innerHTML='<h3>Monthly Cost</h3>';s.appendChild(ct3);
-    ct3.appendChild(mkST(['Month','Input','Output','Cache','Reasoning','Total',''],
+    ct3.appendChild(mkSTf(['Month','Input','Output','Cache','Reasoning','Total',''],
       mo.slice().reverse().map(m=>[m.month,fmtUSD(m.input_cost),fmtUSD(m.output_cost),fmtUSD(m.cache_cost),fmtUSD(m.reasoning_cost),fmtUSD(m.total_cost)]),
-      [1,2,3,4,5]));
+      [1,2,3,4,5],
+      ['<b>Total</b>',fmtUSD(mo.reduce((a,m)=>a+m.input_cost,0)),fmtUSD(mo.reduce((a,m)=>a+m.output_cost,0)),fmtUSD(mo.reduce((a,m)=>a+m.cache_cost,0)),fmtUSD(mo.reduce((a,m)=>a+m.reasoning_cost,0)),fmtUSD(mo.reduce((a,m)=>a+m.total_cost,0))]));
   }
 }
 
