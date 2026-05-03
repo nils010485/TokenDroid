@@ -595,8 +595,10 @@ def get_cost_summary(
     )
 
     model_prices: dict[str, Any] = {}
+    model_names: dict[str, str] = {}
     for m in stats.by_model:
         model_prices[m.model_id] = match_model_price(m.display_name, m.model_id)
+        model_names[m.model_id] = m.display_name
 
     total: dict[str, float] = _zero_cost()
 
@@ -651,6 +653,7 @@ def get_cost_summary(
             conn.close()
         by_project.append({"name": p.name, **pcost})
 
+    daily_by_model: dict[str, list[dict[str, Any]]] = {}
     daily = []
     conn = _ensure_synced()
     try:
@@ -678,19 +681,26 @@ def get_cost_summary(
                     price,
                 )
                 _add_cost(dcost, c)
+                mname = next(
+                    (m.display_name for m in stats.by_model if m.model_id == r["model"]),
+                    r["model"],
+                )
+                daily_by_model.setdefault(mname, []).append({"date": d.date, **c})
             daily.append({"date": d.date, **dcost})
     finally:
         conn.close()
 
-    weekly = _compute_period_costs_weekly(
+    weekly, weekly_by_model = _compute_period_costs_weekly(
         model_prices,
+        model_names,
         project_filter=project_filter,
         model_filter=model_filter,
         date_from=date_from,
         date_to=date_to,
     )
-    monthly = _compute_period_costs_monthly(
+    monthly, monthly_by_model = _compute_period_costs_monthly(
         model_prices,
+        model_names,
         project_filter=project_filter,
         model_filter=model_filter,
         date_from=date_from,
@@ -702,18 +712,22 @@ def get_cost_summary(
         "by_model": by_model,
         "by_project": by_project,
         "daily": daily,
+        "daily_by_model": daily_by_model,
         "weekly": weekly,
+        "weekly_by_model": weekly_by_model,
         "monthly": monthly,
+        "monthly_by_model": monthly_by_model,
     }
 
 
 def _compute_period_costs_weekly(
     model_prices: dict[str, Any],
+    model_names: dict[str, str],
     project_filter: str | None = None,
     model_filter: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     """Compute weekly cost breakdown."""
     from .pricing import compute_cost
 
@@ -736,6 +750,7 @@ def _compute_period_costs_weekly(
     )
     conn = _ensure_synced()
     result = []
+    by_model: dict[str, list[dict[str, Any]]] = {}
     try:
         for w in weekly_rows:
             wcost = _zero()
@@ -769,19 +784,22 @@ def _compute_period_costs_weekly(
                     price,
                 )
                 _add(wcost, c)
+                mname = model_names.get(r["model"], r["model"])
+                by_model.setdefault(mname, []).append({"week": w.get("week", ""), **c})
             result.append({"week": w.get("week", ""), **wcost})
     finally:
         conn.close()
-    return result
+    return result, by_model
 
 
 def _compute_period_costs_monthly(
     model_prices: dict[str, Any],
+    model_names: dict[str, str],
     project_filter: str | None = None,
     model_filter: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     """Compute monthly cost breakdown."""
     from .pricing import compute_cost
 
@@ -804,6 +822,7 @@ def _compute_period_costs_monthly(
     )
     conn = _ensure_synced()
     result = []
+    by_model: dict[str, list[dict[str, Any]]] = {}
     try:
         for mo in monthly_rows:
             mcost = _zero()
@@ -837,7 +856,9 @@ def _compute_period_costs_monthly(
                     price,
                 )
                 _add(mcost, c)
+                mname = model_names.get(r["model"], r["model"])
+                by_model.setdefault(mname, []).append({"month": mo.get("month", ""), **c})
             result.append({"month": mo.get("month", ""), **mcost})
     finally:
         conn.close()
-    return result
+    return result, by_model

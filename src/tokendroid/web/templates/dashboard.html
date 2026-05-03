@@ -52,6 +52,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple
 .cost-item::before{content:' ';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--ci-color)}
 .cost-item .ci-val{font-size:1.25rem;font-weight:700;color:var(--text);line-height:1.2}
 .cost-item .ci-lbl{font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:2px}
+.cost-ctrl{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.cost-period{display:flex;gap:4px}
+.cpb{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:4px 12px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;font-weight:600}
+.cpb:hover{border-color:var(--accent)}
+.cpb.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cost-models{display:flex;flex-wrap:wrap;gap:4px;align-items:center;max-height:80px;overflow-y:auto;padding:4px 0}
+.cm-check{display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.72rem;color:var(--text-muted);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.cm-check:hover{background:var(--border)}
+.cm-check input{accent-color:var(--accent);cursor:pointer}
 .panes{}
 .pane{display:none}
 .pane.on{display:block}
@@ -387,42 +396,62 @@ function buildCost(){
   s.appendChild(strip);
 
   const g=document.createElement('div');g.className='g2';
-  const c1=mkCd('w');c1.innerHTML='<h3>Cost / Day</h3><canvas id="xc1" height="280"></canvas>';g.appendChild(c1);
+  const c1=mkCd('w');
+  c1.innerHTML='<h3>Cost Timeline by Model</h3><div class="cost-ctrl"><div class="cost-period" id="cperiod"></div><div class="cost-models" id="cmodels"></div></div><div style="position:relative;height:320px"><canvas id="xc1"></canvas></div>';
+  g.appendChild(c1);
   s.appendChild(g);
 
-  const dl=cd.daily||[];
-  new Chart(document.getElementById('xc1'),{type:'line',data:{labels:dl.map(d=>d.date),datasets:[
-    {label:'Input',data:dl.map(d=>d.input_cost),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
-    {label:'Output',data:dl.map(d=>d.output_cost),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
-    {label:'Cache',data:dl.map(d=>d.cache_cost),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
-    {label:'Total',data:dl.map(d=>d.total_cost),borderColor:C.ac,backgroundColor:C.ac+'08',fill:false,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2,borderDash:[4,3]},
-  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:20}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
+  const periods=[['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']];
+  const modelMap={'daily':cd.daily_by_model||{},'weekly':cd.weekly_by_model||{},'monthly':cd.monthly_by_model||{}};
+  function _cmn(n){return n.replace(/^custom:/,'').replace(/-\d+$/,'').replace(/\[.*?\]/g,'').replace(/^-/,'').trim()||n}
+  const nameMap={};Object.values(modelMap).forEach(m=>Object.keys(m).forEach(k=>{nameMap[k]=_cmn(k)}));
+  const revMap=Object.fromEntries(Object.entries(nameMap).map(([k,v])=>[v,k]));
+  const matchedNames=[...new Set(Object.values(nameMap))];
+  const modelTotal=matchedNames.map(function(n){const k=revMap[n];let t=0;Object.values(modelMap).forEach(function(m){(m[k]||[]).forEach(function(r){t+=r.total_cost})});return t});  const sortedIdx=matchedNames.map((_,i)=>i).sort((a,b)=>modelTotal[b]-modelTotal[a]);
+  const allModels=sortedIdx.map(i=>matchedNames[i]).filter(n=>modelTotal[matchedNames.indexOf(n)]>0);
+  const origKey=m=>revMap[m];
+  const mColors=allModels.map((_,i)=>CL[i%CL.length]);
+  let selPeriod='daily';
+  let selModels=new Set(allModels);
 
-  if(dl.length){
-    const dtd=mkCd('w');dtd.innerHTML='<h3>Cost / Day</h3>';s.appendChild(dtd);
-    dtd.appendChild(mkSTf(['Date','Input','Output','Cache','Reasoning','Total'],
-      dl.slice().reverse().map(d=>[d.date,fmtUSD(d.input_cost),fmtUSD(d.output_cost),fmtUSD(d.cache_cost),fmtUSD(d.reasoning_cost),fmtUSD(d.total_cost)]),
-      [1,2,3,4,5],
-      ['<b>Total</b>',fmtUSD(dl.reduce((a,d)=>a+d.input_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.output_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.cache_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.reasoning_cost,0)),fmtUSD(dl.reduce((a,d)=>a+d.total_cost,0))]));
-  }
+  const pd=document.getElementById('cperiod');
+  periods.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.className='cpb'+(k===selPeriod?' on':'');b.onclick=()=>{selPeriod=k;pd.querySelectorAll('.cpb').forEach(x=>x.className='cpb');b.className='cpb on';drawTimeline()};pd.appendChild(b)});
 
-  const wl=cd.weekly||[];
-  if(wl.length){
-    const gw=document.createElement('div');gw.className='g2';
-    const cw=mkCd('w');cw.innerHTML='<h3>Weekly Cost</h3><canvas id="xcw" height="280"></canvas>';gw.appendChild(cw);
-    s.appendChild(gw);
-    new Chart(document.getElementById('xcw'),{type:'bar',data:{labels:wl.map(w=>w.week),datasets:[
-      {label:'Input',data:wl.map(w=>w.input_cost),backgroundColor:C.gn+'77',borderRadius:2},
-      {label:'Output',data:wl.map(w=>w.output_cost),backgroundColor:C.tl+'77',borderRadius:2},
-      {label:'Cache',data:wl.map(w=>w.cache_cost),backgroundColor:C.yl+'77',borderRadius:2},
-      {label:'Reasoning',data:wl.map(w=>w.reasoning_cost),backgroundColor:C.pr+'77',borderRadius:2},
-    ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0},stacked:true},y:{grid:{color:GC},stacked:true,ticks:{callback:v=>fmtUSD(v)}}}}});
-    const dtw=mkCd('w');dtw.innerHTML='<h3>Weekly Cost</h3>';s.appendChild(dtw);
-    dtw.appendChild(mkSTf(['Week','Input','Output','Cache','Reasoning','Total'],
-      wl.slice().reverse().map(w=>[w.week,fmtUSD(w.input_cost),fmtUSD(w.output_cost),fmtUSD(w.cache_cost),fmtUSD(w.reasoning_cost),fmtUSD(w.total_cost)]),
-      [1,2,3,4,5],
-      ['<b>Total</b>',fmtUSD(wl.reduce((a,w)=>a+w.input_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.output_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.cache_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.reasoning_cost,0)),fmtUSD(wl.reduce((a,w)=>a+w.total_cost,0))]));
+  const md=document.getElementById('cmodels');
+  const toggleAll=document.createElement('label');toggleAll.className='cm-check';toggleAll.innerHTML='<input type="checkbox" checked id="cmAll"><span>All</span>';md.appendChild(toggleAll);
+  document.getElementById('cmAll').onchange=function(){selModels=this.checked?new Set(allModels):new Set();md.querySelectorAll('.cm-m').forEach((c,i)=>{c.querySelector('input').checked=this.checked;if(this.checked)selModels.add(allModels[i]);else selModels.delete(allModels[i])});drawTimeline()};
+  allModels.forEach((m,i)=>{const l=document.createElement('label');l.className='cm-check cm-m';l.innerHTML=`<input type="checkbox" checked><span style="color:${mColors[i]}">●</span><span>${m}</span>`;l.querySelector('input').onchange=function(){if(this.checked)selModels.add(m);else selModels.delete(m);drawTimeline()};md.appendChild(l)});
+
+  let tlChart=null;
+  function _buildData(){
+    const bm=modelMap[selPeriod];
+    const pKey=selPeriod==='daily'?'date':selPeriod==='weekly'?'week':'month';
+    const agg=cd[selPeriod]||[];
+    const labels=agg.map(d=>d[pKey]);
+    const datasets=[];
+    selModels.forEach(m=>{
+      const ok=origKey(m);
+      const rows=bm[ok]||[];
+      const rMap=Object.fromEntries(rows.map(r=>[r[pKey],r.total_cost]));
+      datasets.push({label:m,data:labels.map(l=>rMap[l]||0),borderColor:mColors[allModels.indexOf(m)],backgroundColor:mColors[allModels.indexOf(m)]+'18',fill:false,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2});
+    });
+    if(selModels.size>0){
+      const sumByLabel=labels.map(function(l,li){let s=0;datasets.forEach(function(ds){s+=(ds.data[li]||0)});return s});
+      datasets.push({label:'Total',data:sumByLabel,borderColor:C.ac,fill:false,tension:.4,pointRadius:2,borderWidth:2,borderDash:[4,3]});
+    }
+    return {labels,datasets};
   }
+  function drawTimeline(){
+    const d=_buildData();
+    if(!tlChart){
+      tlChart=new Chart(document.getElementById('xc1'),{type:'line',data:d,options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:8,usePointStyle:true}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:selPeriod==='daily'?20:undefined}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
+    } else {
+      tlChart.data=d;
+      tlChart.options.scales.x.ticks.maxTicksLimit=selPeriod==='daily'?20:undefined;
+      tlChart.update();
+    }
+  }
+  drawTimeline();
 
   const g2=document.createElement('div');g2.className='g2';
   const c2=mkCd();c2.innerHTML='<h3>Cost by Model</h3><canvas id="xc2" height="260"></canvas>';g2.appendChild(c2);
