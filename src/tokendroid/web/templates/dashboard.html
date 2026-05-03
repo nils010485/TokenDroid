@@ -196,7 +196,7 @@ function buildTabs(){
   });
 }
 function mkCd(cls){const d=document.createElement('div');d.className='cd'+(cls?' '+cls:'');return d}
-function mkT(h,r){const t=document.createElement('table');t.innerHTML='<thead><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead>';const tb=document.createElement('tbody');r.forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=row.map(c=>'<td>'+c+'</td>').join('');tb.appendChild(tr)});t.appendChild(tb);return t}
+function mkT(h,r,foot){const t=document.createElement('table');t.innerHTML='<thead><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead>';const tb=document.createElement('tbody');r.forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=row.map(c=>'<td>'+c+'</td>').join('');tb.appendChild(tr)});t.appendChild(tb);if(foot){const tf=document.createElement('tfoot');const tr=document.createElement('tr');tr.innerHTML=foot.map(c=>'<td>'+c+'</td>').join('');tf.appendChild(tr);t.appendChild(tf)}return t}
 function mkST(h,r,num){
   const t=document.createElement('table'),th=document.createElement('thead'),tr=document.createElement('tr');
   h.forEach((x,i)=>{const e=document.createElement('th');e.innerHTML=x+' <span class="s">&#9650;</span>';e.onclick=()=>{doSort(t,i,num.includes(i))};tr.appendChild(e)});
@@ -242,8 +242,10 @@ function buildDaily(){
   new Chart(document.getElementById('xd5'),{type:'line',data:{labels:dl,datasets:[{label:'Cache %',data:D.daily.map(d=>{const t=d.input+(d.cache||0);return t?((d.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
   const costMap=CD&&CD.daily?Object.fromEntries(CD.daily.map(d=>[d.date,d.total_cost])):{};
   const mx=tot(D.daily,'sessions');
+  const totCost=CD&&CD.daily?CD.daily.reduce((a,d)=>a+d.total_cost,0):0;
   const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs','Sessions'],
-    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),hitP(d.cache||0,d.input),fmt(d.output),d.active_h.toFixed(1)+'h',costMap[d.date]!=null?fmtUSD(costMap[d.date]):'--',d.messages.toLocaleString(),bar(d.sessions,mx)])));
+    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),hitP(d.cache||0,d.input),fmt(d.output),d.active_h.toFixed(1)+'h',costMap[d.date]!=null?fmtUSD(costMap[d.date]):'--',d.messages.toLocaleString(),bar(d.sessions,mx)]),
+    ['<b>Total</b>',D.daily.reduce((a,d)=>a+d.sessions,0),fmt(D.daily.reduce((a,d)=>a+d.input,0)),fmt(D.daily.reduce((a,d)=>a+(d.cache||0),0)),'',fmt(D.daily.reduce((a,d)=>a+d.output,0)),D.daily.reduce((a,d)=>a+d.active_h,0).toFixed(1)+'h',fmtUSD(totCost),D.daily.reduce((a,d)=>a+d.messages,0).toLocaleString(),'']));
 }
 
 function buildWeekly(){
@@ -271,7 +273,8 @@ function buildWeekly(){
   const costMap=CD&&CD.weekly?Object.fromEntries(CD.weekly.map(w=>[w.week,w.total_cost])):{};
   const mx=Math.max(...wl.map(w=>ws[w].s));
   const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs',''],
-    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),hitP(ws[w].c,ws[w].i),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',costMap[w]!=null?fmtUSD(costMap[w]):'--',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
+    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),hitP(ws[w].c,ws[w].i),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',costMap[w]!=null?fmtUSD(costMap[w]):'--',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)]),
+    ['<b>Total</b>',wl.reduce((a,w)=>a+ws[w].s,0),fmt(wl.reduce((a,w)=>a+ws[w].i,0)),fmt(wl.reduce((a,w)=>a+ws[w].c,0)),'',fmt(wl.reduce((a,w)=>a+ws[w].o,0)),wl.reduce((a,w)=>a+ws[w].a,0).toFixed(1)+'h',fmtUSD(CD&&CD.weekly?CD.weekly.reduce((a,w)=>a+w.total_cost,0):0),wl.reduce((a,w)=>a+ws[w].m,0).toLocaleString(),'']));
 }
 
 function buildMonthly(){
@@ -296,7 +299,8 @@ function buildMonthly(){
   const costMap=CD&&CD.monthly?Object.fromEntries(CD.monthly.map(m=>[m.month,m.total_cost])):{};
   const mx=Math.max(...D.monthly.map(m=>m.sessions));
   const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs',''],
-    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),hitP(m.cache||0,m.input),fmt(m.output),(m.active_h||0).toFixed(1)+'h',costMap[m.month]!=null?fmtUSD(costMap[m.month]):'--',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
+    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),hitP(m.cache||0,m.input),fmt(m.output),(m.active_h||0).toFixed(1)+'h',costMap[m.month]!=null?fmtUSD(costMap[m.month]):'--',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)]),
+    ['<b>Total</b>',D.monthly.reduce((a,m)=>a+m.sessions,0),fmt(D.monthly.reduce((a,m)=>a+m.input,0)),fmt(D.monthly.reduce((a,m)=>a+(m.cache||0),0)),'',fmt(D.monthly.reduce((a,m)=>a+m.output,0)),D.monthly.reduce((a,m)=>a+(m.active_h||0),0).toFixed(1)+'h',fmtUSD(CD&&CD.monthly?CD.monthly.reduce((a,m)=>a+m.total_cost,0):0),D.monthly.reduce((a,m)=>a+m.messages,0).toLocaleString(),'']));
 }
 
 function buildTimeline(){
