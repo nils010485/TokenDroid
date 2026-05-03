@@ -214,7 +214,7 @@ function buildDaily(){
     {label:'Input',data:D.daily.map(d=>d.input),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
     {label:'Cache',data:D.daily.map(d=>d.cache||0),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
     {label:'Output',data:D.daily.map(d=>d.output),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}
-  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});
   const c4=mkCd();c4.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xd4" height="200"></canvas>';g.appendChild(c4);
   new Chart(document.getElementById('xd4'),{type:'line',data:{labels:dl,datasets:[{label:'Cache %',data:D.daily.map(d=>{const t=d.input+(d.cache||0);return t?((d.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
@@ -235,7 +235,7 @@ function buildWeekly(){
     {label:'Input',data:wl.map(w=>ws[w].i),backgroundColor:C.gn+'77',borderRadius:3},
     {label:'Cache',data:wl.map(w=>ws[w].c),backgroundColor:C.yl+'77',borderRadius:3},
     {label:'Output',data:wl.map(w=>ws[w].o),backgroundColor:C.tl+'77',borderRadius:3}
-  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xw2'),{type:'line',data:{labels:wl,datasets:[{label:'Cache %',data:wl.map(w=>{const t=ws[w].i+ws[w].c;return t?(ws[w].c/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
   const mx=Math.max(...wl.map(w=>ws[w].s));
   const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
@@ -251,7 +251,7 @@ function buildMonthly(){
     {label:'Input',data:D.monthly.map(m=>m.input),backgroundColor:C.gn+'77',borderRadius:3},
     {label:'Cache',data:D.monthly.map(m=>m.cache||0),backgroundColor:C.yl+'77',borderRadius:3},
     {label:'Output',data:D.monthly.map(m=>m.output),backgroundColor:C.tl+'77',borderRadius:3}
-  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xmc'),{type:'line',data:{labels:D.monthly.map(m=>m.month),datasets:[{label:'Cache %',data:D.monthly.map(m=>{const t=m.input+(m.cache||0);return t?((m.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
   const mx=Math.max(...D.monthly.map(m=>m.sessions));
   const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
