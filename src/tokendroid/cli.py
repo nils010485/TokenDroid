@@ -122,6 +122,39 @@ def top(limit: int, output_json: bool) -> None:
     display_top_sessions(limit=limit, json_output=output_json)
 
 
+@stat.command()
+@click.option("--project", "-p", default=None, help="Filter by project")
+@click.option("--model", "-m", default=None, help="Filter by model")
+@click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option(
+    "--breakdown",
+    type=click.Choice(["model", "project", "day", "week", "month"]),
+    default=None,
+    help="Cost breakdown",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def cost(
+    project: str | None,
+    model: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    breakdown: str | None,
+    output_json: bool,
+) -> None:
+    """Estimate cost using models.dev pricing data."""
+    from .display.rich_cmd import display_cost
+
+    display_cost(
+        project=project,
+        model=model,
+        date_from=date_from,
+        date_to=date_to,
+        breakdown=breakdown,
+        json_output=output_json,
+    )
+
+
 @cli.command()
 def tui() -> None:
     """Launch interactive TUI dashboard."""

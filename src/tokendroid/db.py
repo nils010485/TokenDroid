@@ -396,12 +396,18 @@ def _get_daily_stats(conn: sqlite3.Connection, where: str, params: list[Any]) ->
 
 
 _ALLOWED_ORDER = {
-    "started_at DESC", "started_at ASC",
-    "input_tokens DESC", "input_tokens ASC",
-    "output_tokens DESC", "output_tokens ASC",
-    "message_count DESC", "message_count ASC",
-    "project DESC", "project ASC",
-    "model DESC", "model ASC",
+    "started_at DESC",
+    "started_at ASC",
+    "input_tokens DESC",
+    "input_tokens ASC",
+    "output_tokens DESC",
+    "output_tokens ASC",
+    "message_count DESC",
+    "message_count ASC",
+    "project DESC",
+    "project ASC",
+    "model DESC",
+    "model ASC",
 }
 
 
@@ -553,3 +559,285 @@ def get_monthly_stats(
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+def get_cost_summary(
+    project_filter: str | None = None,
+    model_filter: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict[str, Any]:
+    """Compute cost breakdown using models.dev pricing data.
+
+    Returns a dict with total costs, by_model, by_project, daily, weekly,
+    and monthly breakdowns. Models without a price match get cost of 0.
+    """
+    from .pricing import compute_cost, match_model_price
+
+    def _zero_cost() -> dict[str, float]:
+        return {
+            "input_cost": 0.0,
+            "output_cost": 0.0,
+            "cache_cost": 0.0,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.0,
+        }
+
+    def _add_cost(target: dict[str, float], delta: dict[str, float]) -> None:
+        for k in target:
+            target[k] += delta.get(k, 0)
+
+    stats = get_global_stats(
+        project_filter=project_filter,
+        model_filter=model_filter,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    model_prices: dict[str, Any] = {}
+    for m in stats.by_model:
+        model_prices[m.model_id] = match_model_price(m.display_name, m.model_id)
+
+    total: dict[str, float] = _zero_cost()
+
+    by_model = []
+    for m in stats.by_model:
+        price = model_prices.get(m.model_id)
+        cost = compute_cost(
+            m.input_tokens,
+            m.output_tokens,
+            m.cache_tokens,
+            m.thinking_tokens,
+            price,
+        )
+        by_model.append(
+            {
+                "name": m.display_name,
+                "model_id": m.model_id,
+                "matched": price is not None,
+                **cost,
+            }
+        )
+        _add_cost(total, cost)
+
+    by_project = []
+    for p in stats.by_project:
+        pcost = _zero_cost()
+        conn = _ensure_synced()
+        try:
+            rows = conn.execute(
+                """SELECT model,
+                    COALESCE(SUM(input_tokens), 0) as input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as output_tokens,
+                    COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                    COALESCE(SUM(cache_tokens), 0) as cache_tokens
+                FROM sessions WHERE project = ?
+                GROUP BY model""",
+                [p.name],
+            ).fetchall()
+            for r in rows:
+                price = model_prices.get(r["model"])
+                if price is None:
+                    continue
+                c = compute_cost(
+                    r["input_tokens"],
+                    r["output_tokens"],
+                    r["cache_tokens"],
+                    r["thinking_tokens"],
+                    price,
+                )
+                _add_cost(pcost, c)
+        finally:
+            conn.close()
+        by_project.append({"name": p.name, **pcost})
+
+    daily = []
+    conn = _ensure_synced()
+    try:
+        for d in stats.by_day:
+            dcost = _zero_cost()
+            rows = conn.execute(
+                """SELECT model,
+                    COALESCE(SUM(input_tokens), 0) as input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as output_tokens,
+                    COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                    COALESCE(SUM(cache_tokens), 0) as cache_tokens
+                FROM sessions WHERE DATE(started_at) = ?
+                GROUP BY model""",
+                [d.date],
+            ).fetchall()
+            for r in rows:
+                price = model_prices.get(r["model"])
+                if price is None:
+                    continue
+                c = compute_cost(
+                    r["input_tokens"],
+                    r["output_tokens"],
+                    r["cache_tokens"],
+                    r["thinking_tokens"],
+                    price,
+                )
+                _add_cost(dcost, c)
+            daily.append({"date": d.date, **dcost})
+    finally:
+        conn.close()
+
+    weekly = _compute_period_costs_weekly(
+        model_prices,
+        project_filter=project_filter,
+        model_filter=model_filter,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    monthly = _compute_period_costs_monthly(
+        model_prices,
+        project_filter=project_filter,
+        model_filter=model_filter,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    return {
+        "total": total,
+        "by_model": by_model,
+        "by_project": by_project,
+        "daily": daily,
+        "weekly": weekly,
+        "monthly": monthly,
+    }
+
+
+def _compute_period_costs_weekly(
+    model_prices: dict[str, Any],
+    project_filter: str | None = None,
+    model_filter: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict[str, Any]]:
+    """Compute weekly cost breakdown."""
+    from .pricing import compute_cost
+
+    def _zero() -> dict[str, float]:
+        return {
+            "input_cost": 0.0,
+            "output_cost": 0.0,
+            "cache_cost": 0.0,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.0,
+        }
+
+    def _add(target: dict[str, float], delta: dict[str, float]) -> None:
+        for k in target:
+            target[k] += delta.get(k, 0)
+
+    weekly_rows = get_weekly_stats(
+        project_filter=project_filter,
+        model_filter=model_filter,
+    )
+    conn = _ensure_synced()
+    result = []
+    try:
+        for w in weekly_rows:
+            wcost = _zero()
+            where, params = _build_where(
+                project_filter,
+                model_filter,
+                date_from,
+                date_to,
+            )
+            params.append(w.get("week", ""))
+            rows = conn.execute(
+                f"""SELECT model,
+                    COALESCE(SUM(input_tokens), 0) as input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as output_tokens,
+                    COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                    COALESCE(SUM(cache_tokens), 0) as cache_tokens
+                FROM sessions WHERE {where}
+                AND strftime('%Y-W%W', started_at) = ?
+                GROUP BY model""",
+                params,
+            ).fetchall()
+            for r in rows:
+                price = model_prices.get(r["model"])
+                if price is None:
+                    continue
+                c = compute_cost(
+                    r["input_tokens"],
+                    r["output_tokens"],
+                    r["cache_tokens"],
+                    r["thinking_tokens"],
+                    price,
+                )
+                _add(wcost, c)
+            result.append({"week": w.get("week", ""), **wcost})
+    finally:
+        conn.close()
+    return result
+
+
+def _compute_period_costs_monthly(
+    model_prices: dict[str, Any],
+    project_filter: str | None = None,
+    model_filter: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict[str, Any]]:
+    """Compute monthly cost breakdown."""
+    from .pricing import compute_cost
+
+    def _zero() -> dict[str, float]:
+        return {
+            "input_cost": 0.0,
+            "output_cost": 0.0,
+            "cache_cost": 0.0,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.0,
+        }
+
+    def _add(target: dict[str, float], delta: dict[str, float]) -> None:
+        for k in target:
+            target[k] += delta.get(k, 0)
+
+    monthly_rows = get_monthly_stats(
+        project_filter=project_filter,
+        model_filter=model_filter,
+    )
+    conn = _ensure_synced()
+    result = []
+    try:
+        for mo in monthly_rows:
+            mcost = _zero()
+            where, params = _build_where(
+                project_filter,
+                model_filter,
+                date_from,
+                date_to,
+            )
+            params.append(mo.get("month", ""))
+            rows = conn.execute(
+                f"""SELECT model,
+                    COALESCE(SUM(input_tokens), 0) as input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as output_tokens,
+                    COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                    COALESCE(SUM(cache_tokens), 0) as cache_tokens
+                FROM sessions WHERE {where}
+                AND strftime('%Y-%m', started_at) = ?
+                GROUP BY model""",
+                params,
+            ).fetchall()
+            for r in rows:
+                price = model_prices.get(r["model"])
+                if price is None:
+                    continue
+                c = compute_cost(
+                    r["input_tokens"],
+                    r["output_tokens"],
+                    r["cache_tokens"],
+                    r["thinking_tokens"],
+                    price,
+                )
+                _add(mcost, c)
+            result.append({"month": mo.get("month", ""), **mcost})
+    finally:
+        conn.close()
+    return result

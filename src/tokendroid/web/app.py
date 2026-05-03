@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from ..db import (
+    get_cost_summary,
     get_dow_distribution,
     get_global_stats,
     get_hourly_distribution,
@@ -183,6 +184,23 @@ async def api_stats(
     )
 
 
+@app.get("/api/cost")
+async def api_cost(
+    project: str | None = None,
+    model: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
+    """Cost estimation using models.dev pricing data."""
+    result = get_cost_summary(
+        project_filter=project,
+        model_filter=model,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return JSONResponse(result)
+
+
 @app.post("/api/sync")
 async def api_sync():
     count = sync(full=True)
@@ -211,7 +229,7 @@ def run_web(host: str = "127.0.0.1", port: int = 0, open_browser: bool = True) -
 
         threading.Thread(target=_open, daemon=True).start()
 
-    try:
+    import contextlib
+
+    with contextlib.suppress(KeyboardInterrupt, SystemExit):
         uvicorn.run(app, host=host, port=port, log_level="warning")
-    except (KeyboardInterrupt, SystemExit):
-        pass

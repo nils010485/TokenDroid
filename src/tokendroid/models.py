@@ -98,6 +98,32 @@ class ModelSummary:
 
 
 @dataclass
+class ModelPrice:
+    """Price per 1M tokens for a model from models.dev."""
+
+    model_id: str
+    input_per_1m: float = 0.0
+    output_per_1m: float = 0.0
+    cache_read_per_1m: float = 0.0
+    cache_write_per_1m: float = 0.0
+    reasoning_per_1m: float = 0.0
+
+
+@dataclass
+class CostSummary:
+    """Computed cost breakdown."""
+
+    input_cost: float = 0.0
+    output_cost: float = 0.0
+    cache_cost: float = 0.0
+    reasoning_cost: float = 0.0
+
+    @property
+    def total_cost(self) -> float:
+        return self.input_cost + self.output_cost + self.cache_cost + self.reasoning_cost
+
+
+@dataclass
 class GlobalStats:
     """Global aggregated statistics."""
 

@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from ..db import (
+    get_cost_summary,
     get_global_stats,
     get_monthly_stats,
     get_sessions,
@@ -31,6 +32,15 @@ from .utils import (
     fmt_input_cache,
     fmt_tokens,
 )
+
+
+def _cost_card(label: str, value: str, color: str = COLOR_ACCENT) -> Panel:
+    return Panel(
+        Text(value, style=f"bold {color}", justify="center"),
+        subtitle=Text(label, style=COLOR_DIM),
+        border_style="dim",
+        padding=(0, 2),
+    )
 
 
 def _stat_card(label: str, value: str, color: str = COLOR_ACCENT) -> Panel:
@@ -496,3 +506,167 @@ def display_sessions(
     console.print()
     console.print(t)
     console.print()
+
+
+def display_cost(
+    project: str | None = None,
+    model: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    breakdown: str | None = None,
+    json_output: bool = False,
+) -> None:
+    """Display cost estimation using models.dev pricing."""
+    from ..pricing import fmt_cost
+
+    console = Console()
+    data = get_cost_summary(
+        project_filter=project,
+        model_filter=model,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    total = data["total"]
+
+    if json_output:
+        print(json_mod.dumps(data, indent=2, ensure_ascii=False))
+        return
+
+    cards = [
+        _cost_card("Total Cost", fmt_cost(total["total_cost"]), COLOR_YELLOW),
+        _cost_card("Input Cost", fmt_cost(total["input_cost"]), COLOR_GREEN),
+        _cost_card("Output Cost", fmt_cost(total["output_cost"]), COLOR_TEAL),
+        _cost_card("Cache Cost", fmt_cost(total["cache_cost"]), COLOR_MAUVE),
+        _cost_card("Reasoning Cost", fmt_cost(total["reasoning_cost"]), COLOR_RED),
+    ]
+    console.print()
+    console.print(Columns(cards, equal=True, expand=True))
+    console.print()
+
+    if breakdown == "model" or breakdown is None:
+        t = Table(
+            title="Cost by Model",
+            show_lines=False,
+            border_style="dim",
+            title_style=f"bold {COLOR_ACCENT}",
+        )
+        t.add_column("Model", style="bold white", max_width=35)
+        t.add_column("Input", justify="right", style=COLOR_GREEN)
+        t.add_column("Output", justify="right", style=COLOR_TEAL)
+        t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        t.add_column("Reasoning", justify="right", style=COLOR_RED)
+        t.add_column("Total", justify="right", style=COLOR_YELLOW)
+        t.add_column("Price Found", justify="center", width=10)
+        for m in data["by_model"]:
+            matched_str = "[green]Yes[/]" if m["matched"] else "[dim]No[/]"
+            t.add_row(
+                m["name"],
+                fmt_cost(m["input_cost"]),
+                fmt_cost(m["output_cost"]),
+                fmt_cost(m["cache_cost"]),
+                fmt_cost(m["reasoning_cost"]),
+                fmt_cost(m["total_cost"]),
+                matched_str,
+            )
+        console.print(t)
+        console.print()
+
+    if breakdown == "project" or breakdown is None:
+        t = Table(
+            title="Cost by Project",
+            show_lines=False,
+            border_style="dim",
+            title_style=f"bold {COLOR_ACCENT}",
+        )
+        t.add_column("Project", style="bold white", max_width=40)
+        t.add_column("Total", justify="right", style=COLOR_YELLOW)
+        t.add_column("Input", justify="right", style=COLOR_GREEN)
+        t.add_column("Output", justify="right", style=COLOR_TEAL)
+        t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        for p in data["by_project"]:
+            if p["total_cost"] == 0:
+                continue
+            t.add_row(
+                p["name"],
+                fmt_cost(p["total_cost"]),
+                fmt_cost(p["input_cost"]),
+                fmt_cost(p["output_cost"]),
+                fmt_cost(p["cache_cost"]),
+            )
+        if t.row_count:
+            console.print(t)
+            console.print()
+
+    if breakdown == "day":
+        t = Table(
+            title="Cost / Day",
+            show_lines=False,
+            border_style="dim",
+            title_style=f"bold {COLOR_ACCENT}",
+        )
+        t.add_column("Date", style=COLOR_DIM)
+        t.add_column("Total", justify="right", style=COLOR_YELLOW)
+        t.add_column("Input", justify="right", style=COLOR_GREEN)
+        t.add_column("Output", justify="right", style=COLOR_TEAL)
+        t.add_column("Cache", justify="right", style=COLOR_MAUVE)
+        for d in reversed(data["daily"]):
+            if d["total_cost"] == 0:
+                continue
+            t.add_row(
+                d["date"],
+                fmt_cost(d["total_cost"]),
+                fmt_cost(d["input_cost"]),
+                fmt_cost(d["output_cost"]),
+                fmt_cost(d["cache_cost"]),
+            )
+        if t.row_count:
+            console.print(t)
+            console.print()
+
+    if breakdown == "week":
+        t = Table(
+            title="Cost / Week",
+            show_lines=False,
+            border_style="dim",
+            title_style=f"bold {COLOR_ACCENT}",
+        )
+        t.add_column("Week", style=COLOR_DIM)
+        t.add_column("Total", justify="right", style=COLOR_YELLOW)
+        t.add_column("Input", justify="right", style=COLOR_GREEN)
+        t.add_column("Output", justify="right", style=COLOR_TEAL)
+        for w in data["weekly"]:
+            if w["total_cost"] == 0:
+                continue
+            t.add_row(
+                w["week"],
+                fmt_cost(w["total_cost"]),
+                fmt_cost(w["input_cost"]),
+                fmt_cost(w["output_cost"]),
+            )
+        if t.row_count:
+            console.print(t)
+            console.print()
+
+    if breakdown == "month":
+        t = Table(
+            title="Cost / Month",
+            show_lines=False,
+            border_style="dim",
+            title_style=f"bold {COLOR_ACCENT}",
+        )
+        t.add_column("Month", style=COLOR_DIM)
+        t.add_column("Total", justify="right", style=COLOR_YELLOW)
+        t.add_column("Input", justify="right", style=COLOR_GREEN)
+        t.add_column("Output", justify="right", style=COLOR_TEAL)
+        for mo in data["monthly"]:
+            if mo["total_cost"] == 0:
+                continue
+            t.add_row(
+                mo["month"],
+                fmt_cost(mo["total_cost"]),
+                fmt_cost(mo["input_cost"]),
+                fmt_cost(mo["output_cost"]),
+            )
+        if t.row_count:
+            console.print(t)
+            console.print()

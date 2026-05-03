@@ -11,12 +11,14 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 from ..db import (
+    get_cost_summary,
     get_global_stats,
     get_sessions,
     get_weekly_stats,
     sync,
 )
 from ..models import GlobalStats
+from ..pricing import fmt_cost
 from .utils import (
     COLOR_ACCENT,
     COLOR_GREEN,
@@ -186,8 +188,7 @@ class WeekWidget(Static):
         max_sessions = max(w["sessions"] for w in weekly) or 1
 
         lines.append(
-            f"  {'Week':<10} {'Sess':>5} {'Input':>10} "
-            f"{'Cache':>10} {'Output':>10} {'Active':>8}"
+            f"  {'Week':<10} {'Sess':>5} {'Input':>10} {'Cache':>10} {'Output':>10} {'Active':>8}"
         )
         lines.append(f"  {'─' * 60}")
 
@@ -227,6 +228,73 @@ class SessionsWidget(Static):
                 f"{fmt_tokens(s.get('output_tokens', 0)):>10} "
                 f"{fmt_duration(s.get('active_time_ms', 0)):>8}"
             )
+
+        self.update("\n".join(lines))
+
+
+class CostWidget(Static):
+    """Cost estimation breakdown."""
+
+    def refresh_data(self) -> None:
+        lines = [f"[bold {COLOR_ACCENT}]Cost Estimation[/]\n"]
+        lines.append("[dim]Based on models.dev pricing data[/]\n")
+
+        try:
+            cost = get_cost_summary()
+        except Exception:
+            lines.append("[dim]Failed to load cost data[/]")
+            self.update("\n".join(lines))
+            return
+
+        t = cost.get("total", {})
+        lines.append(
+            f"  [bold]Total:[/] {fmt_cost(t.get('total_cost', 0))}  "
+            f"[{COLOR_GREEN}]In:[/] {fmt_cost(t.get('input_cost', 0))}  "
+            f"[{COLOR_TEAL}]Out:[/] {fmt_cost(t.get('output_cost', 0))}  "
+            f"[{COLOR_YELLOW}]Cache:[/] {fmt_cost(t.get('cache_cost', 0))}  "
+            f"[{COLOR_MAUVE}]Reason:[/] {fmt_cost(t.get('reasoning_cost', 0))}"
+        )
+
+        by_model = cost.get("by_model", [])
+        matched = [m for m in by_model if m.get("matched")]
+        if matched:
+            lines.append(f"\n[bold {COLOR_ACCENT}]By Model[/]")
+            max_cost = max(m.get("total_cost", 0) for m in matched) or 1
+            for m in matched:
+                bar_len = min(int(m.get("total_cost", 0) / max_cost * 35), 35)
+                bar = f"[{COLOR_TEAL}]{'█' * bar_len}[/{COLOR_TEAL}]"
+                lines.append(
+                    f"  {m['name']:<25} {fmt_cost(m.get('total_cost', 0)):>10}  "
+                    f"[dim]in:{fmt_cost(m.get('input_cost', 0))} "
+                    f"out:{fmt_cost(m.get('output_cost', 0))} "
+                    f"cache:{fmt_cost(m.get('cache_cost', 0))}[/]\n"
+                    f"    {bar}"
+                )
+
+        by_project = cost.get("by_project", [])
+        with_cost = [p for p in by_project if p.get("total_cost", 0) > 0]
+        if with_cost:
+            lines.append(f"\n[bold {COLOR_ACCENT}]By Project[/]")
+            max_p = max(p.get("total_cost", 0) for p in with_cost) or 1
+            for p in with_cost[:10]:
+                bar_len = min(int(p.get("total_cost", 0) / max_p * 35), 35)
+                bar = f"[{COLOR_GREEN}]{'█' * bar_len}[/{COLOR_GREEN}]"
+                lines.append(f"  {p['name']:<30} {fmt_cost(p.get('total_cost', 0)):>10}  {bar}")
+
+        monthly = cost.get("monthly", [])
+        if monthly:
+            lines.append(f"\n[bold {COLOR_ACCENT}]Monthly[/]")
+            lines.append(
+                f"  {'Month':<10} {'Total':>10} {'Input':>10} {'Output':>10} {'Cache':>10}"
+            )
+            lines.append(f"  {'─' * 55}")
+            for m in reversed(monthly):
+                lines.append(
+                    f"  {m['month']:<10} {fmt_cost(m.get('total_cost', 0)):>10} "
+                    f"{fmt_cost(m.get('input_cost', 0)):>10} "
+                    f"{fmt_cost(m.get('output_cost', 0)):>10} "
+                    f"{fmt_cost(m.get('cache_cost', 0)):>10}"
+                )
 
         self.update("\n".join(lines))
 
@@ -273,6 +341,8 @@ class NstatApp(App):
                 yield WeekWidget(id="weeks")
             with TabPane("Sessions", id="tab-sessions"):
                 yield SessionsWidget(id="sessions")
+            with TabPane("Cost", id="tab-cost"):
+                yield CostWidget(id="cost")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -307,6 +377,7 @@ class NstatApp(App):
             self.query_one("#projects", ProjectWidget).refresh_data(stats)
             self.query_one("#weeks", WeekWidget).refresh_data()
             self.query_one("#sessions", SessionsWidget).refresh_data()
+            self.query_one("#cost", CostWidget).refresh_data()
         except Exception:
             logger.exception("Failed to update TUI widgets")
 

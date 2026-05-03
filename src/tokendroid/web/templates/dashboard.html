@@ -47,6 +47,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple
 .kpi::before{content:' ';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--kpi-color),transparent)}
 .kpi-value{font-size:1.4rem;font-weight:700;color:var(--text);margin-top:6px;line-height:1.2}
 .kpi-label{font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.cost-strip{display:flex;gap:10px;margin-bottom:28px}
+.cost-item{flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
+.cost-item::before{content:' ';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--ci-color)}
+.cost-item .ci-val{font-size:1.25rem;font-weight:700;color:var(--text);line-height:1.2}
+.cost-item .ci-lbl{font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:2px}
 .panes{}
 .pane{display:none}
 .pane.on{display:block}
@@ -117,7 +122,7 @@ Chart.defaults.plugins.tooltip.displayColors=true;
 Chart.defaults.plugins.tooltip.boxWidth=8;
 Chart.defaults.animation=false;
 const GC='rgba(255,255,255,0.02)';
-let D=null;
+let D=null,CD=null;
 
 function fmt(n){if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toString()}
 function fc(i,c){return c?fmt(i)+' <span class="sub">('+fmt(c)+')</span>':fmt(i)}
@@ -127,7 +132,9 @@ function hitP(c,i){const t=i+c;return t?pct(c,t).toFixed(0)+'%':'-'}
 function bar(v,mx,w=60,c=C.ac){const p=Math.min(v/Math.max(mx,1),1);return `<span class="bar" style="width:${Math.round(p*w)}px;background:${c}"></span>`}
 
 async function load(){
-  const r=await fetch('/api/dashboard');D=await r.json();
+  const [r,rc]=await Promise.all([fetch('/api/dashboard'),fetch('/api/cost')]);
+  D=await r.json();
+  try{CD=await rc.json()}catch(e){CD=null}
   document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
   Object.keys(_built).forEach(k=>delete _built[k]);
   build();
@@ -142,13 +149,16 @@ function build(){
   document.querySelector('#panes>p')?.remove();
 }
 
+function fmtUSD(v){if(v===0)return'$0.00';if(v<0.01)return'$'+v.toFixed(4);if(v<1)return'$'+v.toFixed(3);return'$'+v.toFixed(2)}
 function buildKPIs(){
   const ti=tot(D.daily,'input'),tc=tot(D.daily,'cache'),to=tot(D.daily,'output'),ta=tot(D.daily,'active_h'),ts=tot(D.daily,'sessions'),tm=tot(D.daily,'messages');
   const tt=ti+tc+to;
+  const costV=CD&&CD.total?fmtUSD(CD.total.total_cost):'--';
   document.getElementById('rng').textContent=D.daily.length?D.daily[0].date+' \u2192 '+D.daily[D.daily.length-1].date:'';
   const items=[
     ['Sessions',ts.toLocaleString(),'var(--blue)'],
     ['Total Tokens',fmt(tt),'var(--accent)'],
+    ['Cost',costV,'#f472b6'],
     ['Input',fmt(ti),'var(--green)'],
     ['Cache',fmt(tc),'var(--green)'],
     ['Output',fmt(to),'var(--teal)'],
@@ -160,7 +170,7 @@ function buildKPIs(){
   document.getElementById('kpis').innerHTML=items.map(([l,v,c])=>`<div class="kpi" style="--kpi-color:${c}"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
 }
 
-const TABS=[{id:'daily',l:'Daily'},{id:'weekly',l:'Weekly'},{id:'monthly',l:'Monthly'},{id:'timeline',l:'Timeline'},{id:'models',l:'Models'},{id:'projects',l:'Projects'},{id:'sessions',l:'Sessions'},{id:'heatmap',l:'Patterns'}];
+const TABS=[{id:'daily',l:'Daily'},{id:'weekly',l:'Weekly'},{id:'monthly',l:'Monthly'},{id:'timeline',l:'Timeline'},{id:'models',l:'Models'},{id:'projects',l:'Projects'},{id:'sessions',l:'Sessions'},{id:'cost',l:'Cost'},{id:'heatmap',l:'Patterns'}];
 const ICONS={
   daily:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   weekly:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
@@ -169,6 +179,7 @@ const ICONS={
   models:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
   projects:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
   sessions:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  cost:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   heatmap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>',
 };
 const _built={};
@@ -215,12 +226,24 @@ function buildDaily(){
     {label:'Cache',data:D.daily.map(d=>d.cache||0),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2},
     {label:'Output',data:D.daily.map(d=>d.output),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
-  new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});
-  const c4=mkCd();c4.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xd4" height="200"></canvas>';g.appendChild(c4);
-  new Chart(document.getElementById('xd4'),{type:'line',data:{labels:dl,datasets:[{label:'Cache %',data:D.daily.map(d=>{const t=d.input+(d.cache||0);return t?((d.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+  new Chart(document.getElementById('xd2'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.sessions),backgroundColor:C.ac+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});
+  new Chart(document.getElementById('xd3'),{type:'bar',data:{labels:dl,datasets:[{data:D.daily.map(d=>d.active_h),backgroundColor:C.pr+'aa',borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC}}}}});
+  if(CD&&CD.daily&&CD.daily.length){
+    const c4=mkCd();c4.innerHTML='<h3>Cost / Day</h3><canvas id="xd4c" height="200"></canvas>';g.appendChild(c4);
+    const cm=CD.daily.reduce((a,b)=>a&&a.date===b.date?a:{...b},CD.daily[0]);
+    new Chart(document.getElementById('xd4c'),{type:'line',data:{labels:CD.daily.map(d=>d.date),datasets:[
+      {label:'Input',data:CD.daily.map(d=>d.input_cost),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+      {label:'Output',data:CD.daily.map(d=>d.output_cost),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+      {label:'Cache',data:CD.daily.map(d=>d.cache_cost),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+      {label:'Reasoning',data:CD.daily.map(d=>d.reasoning_cost||0),borderColor:C.pr,backgroundColor:C.pr+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+    ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:20}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
+  }
+  const c5=mkCd();c5.innerHTML='<h3>Cache Hit Rate</h3><canvas id="xd5" height="200"></canvas>';g.appendChild(c5);
+  new Chart(document.getElementById('xd5'),{type:'line',data:{labels:dl,datasets:[{label:'Cache %',data:D.daily.map(d=>{const t=d.input+(d.cache||0);return t?((d.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+  const costMap=CD&&CD.daily?Object.fromEntries(CD.daily.map(d=>[d.date,d.total_cost])):{};
   const mx=tot(D.daily,'sessions');
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Hit%','Output','Active','Msgs','Sessions'],
-    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),hitP(d.cache||0,d.input),fmt(d.output),d.active_h.toFixed(1)+'h',d.messages.toLocaleString(),bar(d.sessions,mx)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Date','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs','Sessions'],
+    D.daily.slice().reverse().map(d=>[d.date,d.sessions,fmt(d.input),fmt(d.cache||0),hitP(d.cache||0,d.input),fmt(d.output),d.active_h.toFixed(1)+'h',costMap[d.date]!=null?fmtUSD(costMap[d.date]):'--',d.messages.toLocaleString(),bar(d.sessions,mx)])));
 }
 
 function buildWeekly(){
@@ -237,9 +260,18 @@ function buildWeekly(){
     {label:'Output',data:wl.map(w=>ws[w].o),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xw2'),{type:'line',data:{labels:wl,datasets:[{label:'Cache %',data:wl.map(w=>{const t=ws[w].i+ws[w].c;return t?(ws[w].c/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+  if(CD&&CD.weekly&&CD.weekly.length){
+    const c3=mkCd();c3.innerHTML='<h3>Weekly Cost</h3><canvas id="xwc" height="200"></canvas>';g.appendChild(c3);
+    new Chart(document.getElementById('xwc'),{type:'bar',data:{labels:CD.weekly.map(w=>w.week),datasets:[
+      {label:'Input',data:CD.weekly.map(w=>w.input_cost),backgroundColor:C.gn+'77',borderRadius:3},
+      {label:'Output',data:CD.weekly.map(w=>w.output_cost),backgroundColor:C.tl+'77',borderRadius:3},
+      {label:'Cache',data:CD.weekly.map(w=>w.cache_cost),backgroundColor:C.yl+'77',borderRadius:3},
+    ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0},stacked:true},y:{grid:{color:GC},stacked:true,ticks:{callback:v=>fmtUSD(v)}}}}});
+  }
+  const costMap=CD&&CD.weekly?Object.fromEntries(CD.weekly.map(w=>[w.week,w.total_cost])):{};
   const mx=Math.max(...wl.map(w=>ws[w].s));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
-    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),hitP(ws[w].c,ws[w].i),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Week','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs',''],
+    wl.slice().reverse().map(w=>[w,ws[w].s,fmt(ws[w].i),fmt(ws[w].c),hitP(ws[w].c,ws[w].i),fmt(ws[w].o),ws[w].a.toFixed(1)+'h',costMap[w]!=null?fmtUSD(costMap[w]):'--',ws[w].m.toLocaleString(),bar(ws[w].s,mx,50,C.pr)])));
 }
 
 function buildMonthly(){
@@ -253,9 +285,18 @@ function buildMonthly(){
     {label:'Output',data:D.monthly.map(m=>m.output),backgroundColor:C.tl+'77',borderRadius:3}
   ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{type:'logarithmic',grid:{color:GC},ticks:{callback:v=>fmt(v)}}}}});
   new Chart(document.getElementById('xmc'),{type:'line',data:{labels:D.monthly.map(m=>m.month),datasets:[{label:'Cache %',data:D.monthly.map(m=>{const t=m.input+(m.cache||0);return t?((m.cache||0)/t*100).toFixed(1):0}),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0}},y:{grid:{color:GC},min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+  if(CD&&CD.monthly&&CD.monthly.length){
+    const c3=mkCd('w');c3.innerHTML='<h3>Monthly Cost</h3><canvas id="xmcost" height="300"></canvas>';g.appendChild(c3);
+    new Chart(document.getElementById('xmcost'),{type:'bar',data:{labels:CD.monthly.map(m=>m.month),datasets:[
+      {label:'Input',data:CD.monthly.map(m=>m.input_cost),backgroundColor:C.gn+'77',borderRadius:3},
+      {label:'Output',data:CD.monthly.map(m=>m.output_cost),backgroundColor:C.tl+'77',borderRadius:3},
+      {label:'Cache',data:CD.monthly.map(m=>m.cache_cost),backgroundColor:C.yl+'77',borderRadius:3},
+    ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0},stacked:true},y:{grid:{color:GC},stacked:true,ticks:{callback:v=>fmtUSD(v)}}}}});
+  }
+  const costMap=CD&&CD.monthly?Object.fromEntries(CD.monthly.map(m=>[m.month,m.total_cost])):{};
   const mx=Math.max(...D.monthly.map(m=>m.sessions));
-  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Hit%','Output','Active','Msgs',''],
-    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),hitP(m.cache||0,m.input),fmt(m.output),(m.active_h||0).toFixed(1)+'h',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
+  const ct=mkCd('w');s.appendChild(ct);ct.appendChild(mkT(['Month','Sess','Input','Cache','Hit%','Output','Active','Cost','Msgs',''],
+    D.monthly.slice().reverse().map(m=>[m.month,m.sessions,fmt(m.input),fmt(m.cache||0),hitP(m.cache||0,m.input),fmt(m.output),(m.active_h||0).toFixed(1)+'h',costMap[m.month]!=null?fmtUSD(costMap[m.month]):'--',m.messages.toLocaleString(),bar(m.sessions,mx,50,C.yl)])));
 }
 
 function buildTimeline(){
@@ -308,10 +349,80 @@ function buildProjects(){
 }
 
 function buildSessions(){
+  const modelCostRate={};
+  if(CD&&CD.by_model){
+    const modelTokens={};
+    D.models.forEach(m=>{modelTokens[m.name]=(m.input||0)+(m.cache||0)+(m.output||0)||1});
+    CD.by_model.filter(m=>m.matched).forEach(m=>{
+      const t=modelTokens[m.name]||1;
+      modelCostRate[m.name]=m.total_cost/t;
+    });
+  }
   const s=document.getElementById('p-sessions'),ct=mkCd('w');s.appendChild(ct);
-  ct.appendChild(mkST(['#','Project','Model','Total','Input','Cache','Output','Date','Title'],
-    D.top.map((s,i)=>{const t=(s.input||0)+(s.output||0)+(s.cache||0);return[i+1,s.project.split('/').slice(-2).join('/'),s.model,fmt(t),fmt(s.input||0),fmt(s.cache||0),fmt(s.output||0),s.date,s.title]}),
-    [0,1,2,3,4,5,6,7]));
+  ct.appendChild(mkST(['#','Project','Model','Total','Input','Cache','Output','Cost','Date','Title'],
+    D.top.map((s,i)=>{const t=(s.input||0)+(s.output||0)+(s.cache||0);const cost=modelCostRate[s.model]?fmtUSD(t*modelCostRate[s.model]):'--';return[i+1,s.project.split('/').slice(-2).join('/'),s.model,fmt(t),fmt(s.input||0),fmt(s.cache||0),fmt(s.output||0),cost,s.date,s.title]}),
+    [0,1,2,3,4,5,6,7,8]));
+}
+
+function buildCost(){
+  const s=document.getElementById('p-cost'),cd=CD;
+  s.innerHTML='';
+  if(!cd||!cd.total){s.innerHTML='<p style="padding:40px;text-align:center;color:var(--text-dim)">No cost data available</p>';return}
+  const t=cd.total;
+  const items=[
+    ['Total Cost',fmtUSD(t.total_cost),'var(--accent)'],
+    ['Input Cost',fmtUSD(t.input_cost),'var(--green)'],
+    ['Output Cost',fmtUSD(t.output_cost),'var(--teal)'],
+    ['Cache Cost',fmtUSD(t.cache_cost),'var(--yellow)'],
+    ['Reasoning',fmtUSD(t.reasoning_cost),'var(--purple)'],
+  ];
+  const strip=document.createElement('div');strip.className='cost-strip';
+  strip.innerHTML=items.map(([l,v,c])=>`<div class="cost-item" style="--ci-color:${c}"><div><div class="ci-lbl">${l}</div><div class="ci-val">${v}</div></div></div>`).join('');
+  s.appendChild(strip);
+
+  const g=document.createElement('div');g.className='g2';
+  const c1=mkCd('w');c1.innerHTML='<h3>Cost / Day</h3><canvas id="xc1" height="280"></canvas>';g.appendChild(c1);
+  s.appendChild(g);
+
+  const dl=cd.daily||[];
+  new Chart(document.getElementById('xc1'),{type:'line',data:{labels:dl.map(d=>d.date),datasets:[
+    {label:'Input',data:dl.map(d=>d.input_cost),borderColor:C.gn,backgroundColor:C.gn+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+    {label:'Output',data:dl.map(d=>d.output_cost),borderColor:C.tl,backgroundColor:C.tl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+    {label:'Cache',data:dl.map(d=>d.cache_cost),borderColor:C.yl,backgroundColor:C.yl+'18',fill:true,tension:.4,pointRadius:2,pointHoverRadius:4,borderWidth:2},
+  ]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},offset:true,ticks:{maxRotation:0,maxTicksLimit:20}},y:{grid:{color:GC},ticks:{callback:v=>fmtUSD(v)}}}}});
+
+  const g2=document.createElement('div');g2.className='g2';
+  const c2=mkCd();c2.innerHTML='<h3>Cost by Model</h3><canvas id="xc2" height="260"></canvas>';g2.appendChild(c2);
+  const c3=mkCd();c3.innerHTML='<h3>Cost Share</h3><canvas id="xc3" height="260"></canvas>';g2.appendChild(c3);
+  s.appendChild(g2);
+
+  const bm=cd.by_model||[];
+  const matched=bm.filter(m=>m.matched);
+  new Chart(document.getElementById('xc2'),{type:'bar',data:{labels:matched.map(m=>m.name),datasets:[{label:'Input',data:matched.map(m=>m.input_cost),backgroundColor:C.gn+'77',borderRadius:2},{label:'Output',data:matched.map(m=>m.output_cost),backgroundColor:C.tl+'77',borderRadius:2},{label:'Cache',data:matched.map(m=>m.cache_cost),backgroundColor:C.yl+'77',borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{labels:{boxWidth:8}}},scales:{x:{grid:{color:GC},stacked:true,ticks:{callback:v=>fmtUSD(v)}},y:{grid:{display:false},stacked:true}}}});
+  new Chart(document.getElementById('xc3'),{type:'doughnut',data:{labels:matched.map(m=>m.name),datasets:[{data:matched.map(m=>m.total_cost),backgroundColor:CL,borderWidth:0}]},options:{aspectRatio:1.4,plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
+
+  const mxModel=Math.max(...matched.map(m=>m.total_cost),1);
+  const ct1=mkCd('w');ct1.innerHTML='<h3>Cost by Model</h3>';s.appendChild(ct1);
+  ct1.appendChild(mkST(['Model','Input','Output','Cache','Reasoning','Total','Matched',''],
+    matched.map(m=>[m.name,fmtUSD(m.input_cost),fmtUSD(m.output_cost),fmtUSD(m.cache_cost),fmtUSD(m.reasoning_cost),fmtUSD(m.total_cost),m.matched?'Yes':'No',bar(m.total_cost,mxModel,50,C.ac)]),
+    [1,2,3,4,5]));
+
+  const bp=(cd.by_project||[]).filter(p=>p.total_cost>0);
+  if(bp.length){
+    const mxP=Math.max(...bp.map(p=>p.total_cost),1);
+    const ct2=mkCd('w');ct2.innerHTML='<h3>Cost by Project</h3>';s.appendChild(ct2);
+    ct2.appendChild(mkST(['Project','Input','Output','Cache','Reasoning','Total',''],
+      bp.map(p=>[p.name,fmtUSD(p.input_cost),fmtUSD(p.output_cost),fmtUSD(p.cache_cost),fmtUSD(p.reasoning_cost),fmtUSD(p.total_cost),bar(p.total_cost,mxP,50,C.gn)]),
+      [1,2,3,4,5]));
+  }
+
+  const mo=cd.monthly||[];
+  if(mo.length){
+    const ct3=mkCd('w');ct3.innerHTML='<h3>Monthly Cost</h3>';s.appendChild(ct3);
+    ct3.appendChild(mkST(['Month','Input','Output','Cache','Reasoning','Total',''],
+      mo.slice().reverse().map(m=>[m.month,fmtUSD(m.input_cost),fmtUSD(m.output_cost),fmtUSD(m.cache_cost),fmtUSD(m.reasoning_cost),fmtUSD(m.total_cost)]),
+      [1,2,3,4,5]));
+  }
 }
 
 function buildHeatmap(){
