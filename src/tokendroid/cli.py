@@ -127,6 +127,9 @@ def top(limit: int, output_json: bool) -> None:
 @click.option("--model", "-m", default=None, help="Filter by model")
 @click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
 @click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option("--daily", "breakdown_daily", is_flag=True, help="Daily cost breakdown")
+@click.option("--weekly", "breakdown_weekly", is_flag=True, help="Weekly cost breakdown")
+@click.option("--monthly", "breakdown_monthly", is_flag=True, help="Monthly cost breakdown")
 @click.option(
     "--breakdown",
     type=click.Choice(["model", "project", "day", "week", "month"]),
@@ -139,11 +142,21 @@ def cost(
     model: str | None,
     date_from: str | None,
     date_to: str | None,
+    breakdown_daily: bool,
+    breakdown_weekly: bool,
+    breakdown_monthly: bool,
     breakdown: str | None,
     output_json: bool,
 ) -> None:
     """Estimate cost using models.dev pricing data."""
     from .display.rich_cmd import display_cost
+
+    if breakdown_daily:
+        breakdown = "day"
+    elif breakdown_weekly:
+        breakdown = "week"
+    elif breakdown_monthly:
+        breakdown = "month"
 
     display_cost(
         project=project,
