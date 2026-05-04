@@ -18,10 +18,12 @@ def stat() -> None:
 
 
 @stat.command()
+@click.option("--limit", "-n", default=10, help="Max rows per table")
 @click.option("--project", "-p", default=None, help="Filter by project")
 @click.option("--model", "-m", default=None, help="Filter by model")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def overview(
+    limit: int,
     project: str | None,
     model: str | None,
     output_json: bool,
@@ -29,16 +31,18 @@ def overview(
     """Global overview: models, projects, KPIs."""
     from .display.rich_cmd import display_overview
 
-    display_overview(project=project, model=model, json_output=output_json)
+    display_overview(project=project, model=model, limit=limit, json_output=output_json)
 
 
 @stat.command()
+@click.option("--limit", "-n", default=10, help="Max rows to show")
 @click.option("--project", "-p", default=None, help="Filter by project")
 @click.option("--model", "-m", default=None, help="Filter by model")
 @click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
 @click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def daily(
+    limit: int,
     project: str | None,
     model: str | None,
     date_from: str | None,
@@ -53,15 +57,18 @@ def daily(
         model=model,
         date_from=date_from,
         date_to=date_to,
+        limit=limit,
         json_output=output_json,
     )
 
 
 @stat.command()
+@click.option("--limit", "-n", default=10, help="Max rows to show")
 @click.option("--project", "-p", default=None, help="Filter by project")
 @click.option("--model", "-m", default=None, help="Filter by model")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def weekly(
+    limit: int,
     project: str | None,
     model: str | None,
     output_json: bool,
@@ -69,14 +76,16 @@ def weekly(
     """Weekly breakdown with sparkline bars."""
     from .display.rich_cmd import display_weekly
 
-    display_weekly(project=project, model=model, json_output=output_json)
+    display_weekly(project=project, model=model, limit=limit, json_output=output_json)
 
 
 @stat.command()
+@click.option("--limit", "-n", default=10, help="Max rows to show")
 @click.option("--project", "-p", default=None, help="Filter by project")
 @click.option("--model", "-m", default=None, help="Filter by model")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def monthly(
+    limit: int,
     project: str | None,
     model: str | None,
     output_json: bool,
@@ -84,11 +93,11 @@ def monthly(
     """Monthly breakdown with sparkline bars."""
     from .display.rich_cmd import display_monthly
 
-    display_monthly(project=project, model=model, json_output=output_json)
+    display_monthly(project=project, model=model, limit=limit, json_output=output_json)
 
 
 @stat.command()
-@click.option("--limit", "-n", default=15, help="Number of sessions to show")
+@click.option("--limit", "-n", default=10, help="Number of sessions to show")
 @click.option("--top", "show_top", is_flag=True, help="Sort by total tokens instead of date")
 @click.option("--project", "-p", default=None, help="Filter by project")
 @click.option("--model", "-m", default=None, help="Filter by model")
@@ -113,7 +122,7 @@ def sessions(
 
 
 @stat.command()
-@click.option("--limit", "-n", default=15, help="Number of sessions to show")
+@click.option("--limit", "-n", default=10, help="Number of sessions to show")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def top(limit: int, output_json: bool) -> None:
     """Top sessions by total tokens."""

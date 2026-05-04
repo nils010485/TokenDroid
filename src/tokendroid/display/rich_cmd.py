@@ -55,6 +55,7 @@ def _stat_card(label: str, value: str, color: str = COLOR_ACCENT) -> Panel:
 def display_overview(
     project: str | None = None,
     model: str | None = None,
+    limit: int = 10,
     json_output: bool = False,
 ) -> None:
     """Global overview with KPIs, models, projects."""
@@ -129,7 +130,7 @@ def display_overview(
     t.add_column("Active", justify="right", style=COLOR_MAUVE)
     t.add_column("Msgs", justify="right", style=COLOR_DIM)
     t.add_column("Projs", justify="right", style=COLOR_DIM, width=5)
-    for m in stats.by_model:
+    for m in stats.by_model[:limit]:
         t.add_row(
             m.display_name,
             str(m.sessions),
@@ -169,7 +170,7 @@ def display_overview(
     t.add_column("Output", justify="right", style=COLOR_TEAL)
     t.add_column("Active", justify="right", style=COLOR_MAUVE)
     t.add_column("Top Models", style=COLOR_DIM, max_width=45)
-    for p in stats.by_project:
+    for p in stats.by_project[:limit]:
         t.add_row(
             p.name,
             str(p.sessions),
@@ -200,6 +201,7 @@ def display_daily(
     model: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    limit: int = 10,
     json_output: bool = False,
 ) -> None:
     """Daily breakdown."""
@@ -247,7 +249,7 @@ def display_daily(
     t.add_column("Bar", min_width=20)
 
     max_sess = max((d.sessions for d in stats.by_day), default=1) or 1
-    for d in reversed(stats.by_day[-30:]):
+    for d in reversed(stats.by_day[-limit:]):
         t.add_row(
             d.date,
             str(d.sessions),
@@ -281,6 +283,7 @@ def display_daily(
 def display_weekly(
     project: str | None = None,
     model: str | None = None,
+    limit: int = 10,
     json_output: bool = False,
 ) -> None:
     """Weekly breakdown."""
@@ -306,7 +309,7 @@ def display_weekly(
     t.add_column("Bar", min_width=20)
 
     max_sess = max((w["sessions"] for w in weekly), default=1) or 1
-    for w in reversed(weekly):
+    for w in reversed(weekly[-limit:]):
         t.add_row(
             w["week"],
             str(w["sessions"]),
@@ -342,6 +345,7 @@ def display_weekly(
 def display_monthly(
     project: str | None = None,
     model: str | None = None,
+    limit: int = 10,
     json_output: bool = False,
 ) -> None:
     """Monthly breakdown."""
@@ -367,7 +371,7 @@ def display_monthly(
     t.add_column("Bar", min_width=20)
 
     max_sess = max((m["sessions"] for m in monthly), default=1) or 1
-    for m in reversed(monthly):
+    for m in reversed(monthly[-limit:]):
         t.add_row(
             m["month"],
             str(m["sessions"]),
@@ -400,7 +404,7 @@ def display_monthly(
     console.print()
 
 
-def display_top_sessions(limit: int = 15, json_output: bool = False) -> None:
+def display_top_sessions(limit: int = 10, json_output: bool = False) -> None:
     """Top sessions by total tokens."""
     console = Console()
     top = get_top_sessions(limit)
@@ -445,7 +449,7 @@ def display_top_sessions(limit: int = 15, json_output: bool = False) -> None:
 
 
 def display_sessions(
-    limit: int = 15,
+    limit: int = 10,
     show_top: bool = False,
     project: str | None = None,
     model: str | None = None,

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..db import (
     get_cost_summary,
@@ -23,12 +24,16 @@ from ..db import (
 )
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="TokenDroid", docs_url=None, redoc_url=None)
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
+    """Render the main dashboard HTML page."""
     html = (TEMPLATES_DIR / "dashboard.html").read_text()
     return HTMLResponse(html)
 
@@ -130,6 +135,7 @@ async def api_stats(
     date_from: str | None = None,
     date_to: str | None = None,
 ):
+    """Return aggregated session statistics with optional filters."""
     stats = get_global_stats(
         project_filter=project,
         model_filter=model,
@@ -203,6 +209,7 @@ async def api_cost(
 
 @app.post("/api/sync")
 async def api_sync():
+    """Force a full re-sync and return the number of sessions synced."""
     count = sync(full=True)
     return JSONResponse({"synced": count})
 
@@ -215,6 +222,7 @@ def _find_free_port(host: str = "127.0.0.1") -> int:
 
 
 def run_web(host: str = "127.0.0.1", port: int = 0, open_browser: bool = True) -> None:
+    """Start the uvicorn web server, optionally opening a browser tab."""
     import uvicorn
 
     if port == 0:

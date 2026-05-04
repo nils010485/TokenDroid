@@ -73,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_stats(date);
 
 
 def _get_conn() -> sqlite3.Connection:
+    """Create a SQLite connection with WAL mode and ensure schema is up to date."""
     DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.execute("PRAGMA journal_mode=WAL")
@@ -118,6 +119,7 @@ def sync(full: bool = False) -> int:
 
 
 def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> None:
+    """Insert or update session records in the database."""
     conn.executemany(
         """INSERT OR REPLACE INTO sessions
         (id, project, title, model, model_display, provider,
@@ -153,6 +155,7 @@ def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> N
 
 
 def _rebuild_daily(conn: sqlite3.Connection) -> None:
+    """Rebuild the daily_stats table from sessions."""
     conn.execute("DELETE FROM daily_stats")
     conn.execute(
         """INSERT INTO daily_stats (date, project, model, sessions,
@@ -176,6 +179,7 @@ def _rebuild_daily(conn: sqlite3.Connection) -> None:
 
 
 def _sync_history(conn: sqlite3.Connection) -> None:
+    """Parse and persist shell history entries."""
     entries = parse_history()
     if not entries:
         return
@@ -187,6 +191,7 @@ def _sync_history(conn: sqlite3.Connection) -> None:
 
 
 def _update_sync_state(conn: sqlite3.Connection) -> None:
+    """Record current file mtimes as the sync checkpoint."""
     mtimes = get_file_mtimes()
     conn.executemany(
         "INSERT OR REPLACE INTO sync_state (factory_path, last_modified) VALUES (?, ?)",
@@ -261,6 +266,7 @@ def get_global_stats(
 
 
 def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards in a value."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -270,6 +276,11 @@ def _build_where(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> tuple[str, list[Any]]:
+    """Build a SQL WHERE clause from optional filter arguments.
+
+    Returns:
+        A tuple of (where_clause, params_list).
+    """
     clauses: list[str] = ["1=1"]
     params: list[Any] = []
     if project_filter:
@@ -290,6 +301,7 @@ def _build_where(
 def _get_model_summaries(
     conn: sqlite3.Connection, where: str, params: list[Any]
 ) -> list[ModelSummary]:
+    """Aggregate session stats grouped by model."""
     rows = conn.execute(
         f"""SELECT
             model, model_display,
@@ -326,6 +338,7 @@ def _get_model_summaries(
 def _get_project_summaries(
     conn: sqlite3.Connection, where: str, params: list[Any]
 ) -> list[ProjectSummary]:
+    """Aggregate session stats grouped by project."""
     rows = conn.execute(
         f"""SELECT
             project,
@@ -366,6 +379,7 @@ def _get_project_summaries(
 
 
 def _get_daily_stats(conn: sqlite3.Connection, where: str, params: list[Any]) -> list[DailyStat]:
+    """Aggregate session stats grouped by date."""
     rows = conn.execute(
         f"""SELECT
             DATE(started_at) as date,
@@ -570,7 +584,8 @@ def get_cost_summary(
     """Compute cost breakdown using models.dev pricing data.
 
     Returns a dict with total costs, by_model, by_project, daily, weekly,
-    and monthly breakdowns. Models without a price match get cost of 0.
+    monthly breakdowns, cache_savings, forecast, and avg cost metrics.
+    Models without a price match get cost of 0.
     """
     from .pricing import compute_cost, match_model_price
 
@@ -581,11 +596,29 @@ def get_cost_summary(
             "cache_cost": 0.0,
             "reasoning_cost": 0.0,
             "total_cost": 0.0,
+            "cache_savings": 0.0,
         }
 
     def _add_cost(target: dict[str, float], delta: dict[str, float]) -> None:
         for k in target:
             target[k] += delta.get(k, 0)
+
+    def _compute_with_savings(
+        input_tokens: int,
+        output_tokens: int,
+        cache_tokens: int,
+        thinking_tokens: int,
+        price: Any,
+    ) -> dict[str, float]:
+        cost = compute_cost(input_tokens, output_tokens, cache_tokens, thinking_tokens, price)
+        if price is not None and cache_tokens > 0:
+            input_rate = price.input_per_1m / 1_000_000
+            cache_rate = price.cache_read_per_1m / 1_000_000 if price.cache_read_per_1m else 0.0
+            savings = cache_tokens * (input_rate - cache_rate)
+            cost["cache_savings"] = max(savings, 0.0)
+        else:
+            cost["cache_savings"] = 0.0
+        return cost
 
     stats = get_global_stats(
         project_filter=project_filter,
@@ -601,26 +634,46 @@ def get_cost_summary(
         model_names[m.model_id] = m.display_name
 
     total: dict[str, float] = _zero_cost()
+    total_sessions_priced = 0
+    total_messages_priced = 0
 
     by_model = []
     for m in stats.by_model:
         price = model_prices.get(m.model_id)
-        cost = compute_cost(
+        cost = _compute_with_savings(
             m.input_tokens,
             m.output_tokens,
             m.cache_tokens,
             m.thinking_tokens,
             price,
         )
+        avg_sess = cost["total_cost"] / m.sessions if m.sessions else 0.0
+        avg_msg = cost["total_cost"] / m.messages if m.messages else 0.0
+        if price is not None:
+            total_sessions_priced += m.sessions
+            total_messages_priced += m.messages
         by_model.append(
             {
                 "name": m.display_name,
                 "model_id": m.model_id,
                 "matched": price is not None,
+                "sessions": m.sessions,
+                "messages": m.messages,
+                "avg_cost_per_session": avg_sess,
+                "avg_cost_per_message": avg_msg,
                 **cost,
             }
         )
         _add_cost(total, cost)
+
+    total_avg = {
+        "avg_cost_per_session": (
+            total["total_cost"] / total_sessions_priced if total_sessions_priced else 0.0
+        ),
+        "avg_cost_per_message": (
+            total["total_cost"] / total_messages_priced if total_messages_priced else 0.0
+        ),
+    }
 
     by_project = []
     for p in stats.by_project:
@@ -641,7 +694,7 @@ def get_cost_summary(
                 price = model_prices.get(r["model"])
                 if price is None:
                     continue
-                c = compute_cost(
+                c = _compute_with_savings(
                     r["input_tokens"],
                     r["output_tokens"],
                     r["cache_tokens"],
@@ -673,7 +726,7 @@ def get_cost_summary(
                 price = model_prices.get(r["model"])
                 if price is None:
                     continue
-                c = compute_cost(
+                c = _compute_with_savings(
                     r["input_tokens"],
                     r["output_tokens"],
                     r["cache_tokens"],
@@ -707,8 +760,14 @@ def get_cost_summary(
         date_to=date_to,
     )
 
+    forecast = _compute_forecast(daily)
+    hourly_cost = _get_hourly_cost_distribution(model_prices)
+    dow_cost = _get_dow_cost_distribution(model_prices)
+
     return {
         "total": total,
+        "total_avg": total_avg,
+        "forecast": forecast,
         "by_model": by_model,
         "by_project": by_project,
         "daily": daily,
@@ -717,7 +776,141 @@ def get_cost_summary(
         "weekly_by_model": weekly_by_model,
         "monthly": monthly,
         "monthly_by_model": monthly_by_model,
+        "hourly_cost": hourly_cost,
+        "dow_cost": dow_cost,
     }
+
+
+def _compute_forecast(daily: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute 30-day linear forecast and trend from daily cost data."""
+    from datetime import date, timedelta
+
+    if not daily or len(daily) < 2:
+        return {
+            "projected_cost_30d": 0.0,
+            "daily_avg_30d": 0.0,
+            "trend_pct": 0.0,
+            "trend_direction": "flat",
+        }
+
+    today = date.today()
+    cutoff_30 = today - timedelta(days=30)
+    cutoff_14 = today - timedelta(days=14)
+    cutoff_7 = today - timedelta(days=7)
+
+    last_30 = [d for d in daily if date.fromisoformat(d["date"]) >= cutoff_30]
+    if not last_30:
+        return {
+            "projected_cost_30d": 0.0,
+            "daily_avg_30d": 0.0,
+            "trend_pct": 0.0,
+            "trend_direction": "flat",
+        }
+
+    sum_30 = sum(d["total_cost"] for d in last_30)
+    first_dt = date.fromisoformat(last_30[0]["date"])
+    last_dt = date.fromisoformat(last_30[-1]["date"])
+    days_covered = max((last_dt - first_dt).days + 1, 1)
+    daily_avg = sum_30 / days_covered
+    projected_30d = daily_avg * 30
+
+    last_7 = [d for d in daily if date.fromisoformat(d["date"]) >= cutoff_7]
+    prev_7 = [d for d in daily if cutoff_14 <= date.fromisoformat(d["date"]) < cutoff_7]
+
+    avg_last7 = sum(d["total_cost"] for d in last_7) / max(len(last_7), 1)
+    avg_prev7 = sum(d["total_cost"] for d in prev_7) / max(len(prev_7), 1)
+
+    trend_pct = (avg_last7 - avg_prev7) / avg_prev7 * 100 if avg_prev7 > 0 else 0.0
+
+    if trend_pct > 5:
+        trend_direction = "up"
+    elif trend_pct < -5:
+        trend_direction = "down"
+    else:
+        trend_direction = "flat"
+
+    return {
+        "projected_cost_30d": round(projected_30d, 4),
+        "daily_avg_30d": round(daily_avg, 4),
+        "trend_pct": round(trend_pct, 1),
+        "trend_direction": trend_direction,
+    }
+
+
+def _get_hourly_cost_distribution(
+    model_prices: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Get cost by hour of day for heatmap toggle."""
+    from .pricing import compute_cost
+
+    conn = _ensure_synced()
+    try:
+        rows = conn.execute(
+            """SELECT
+                CAST(strftime('%H', started_at) AS INTEGER) as hour,
+                model,
+                COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens,
+                COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                COALESCE(SUM(cache_tokens), 0) as cache_tokens
+            FROM sessions WHERE started_at != ''
+            GROUP BY hour, model"""
+        ).fetchall()
+        hourly: dict[int, float] = {}
+        for r in rows:
+            h = r["hour"]
+            price = model_prices.get(r["model"])
+            if price is None:
+                continue
+            c = compute_cost(
+                r["input_tokens"],
+                r["output_tokens"],
+                r["cache_tokens"],
+                r["thinking_tokens"],
+                price,
+            )
+            hourly[h] = hourly.get(h, 0.0) + c["total_cost"]
+        return [{"hour": h, "cost": round(hourly.get(h, 0.0), 4)} for h in range(24)]
+    finally:
+        conn.close()
+
+
+def _get_dow_cost_distribution(
+    model_prices: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Get cost by day of week for heatmap toggle."""
+    from .pricing import compute_cost
+
+    conn = _ensure_synced()
+    try:
+        rows = conn.execute(
+            """SELECT
+                CAST(strftime('%w', started_at) AS INTEGER) as dow,
+                model,
+                COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens,
+                COALESCE(SUM(thinking_tokens), 0) as thinking_tokens,
+                COALESCE(SUM(cache_tokens), 0) as cache_tokens
+            FROM sessions WHERE started_at != ''
+            GROUP BY dow, model"""
+        ).fetchall()
+        dow_map: dict[int, float] = {}
+        for r in rows:
+            dow = r["dow"]
+            price = model_prices.get(r["model"])
+            if price is None:
+                continue
+            c = compute_cost(
+                r["input_tokens"],
+                r["output_tokens"],
+                r["cache_tokens"],
+                r["thinking_tokens"],
+                price,
+            )
+            dow_map[dow] = dow_map.get(dow, 0.0) + c["total_cost"]
+        return [{"dow": d, "cost": round(dow_map.get(d, 0.0), 4)} for d in range(7)]
+    finally:
+        conn.close()
 
 
 def _compute_period_costs_weekly(
@@ -738,11 +931,21 @@ def _compute_period_costs_weekly(
             "cache_cost": 0.0,
             "reasoning_cost": 0.0,
             "total_cost": 0.0,
+            "cache_savings": 0.0,
         }
 
     def _add(target: dict[str, float], delta: dict[str, float]) -> None:
         for k in target:
             target[k] += delta.get(k, 0)
+
+    def _with_savings(cost: dict[str, float], cache_tokens: int, price: Any) -> dict[str, float]:
+        if price is not None and cache_tokens > 0:
+            input_rate = price.input_per_1m / 1_000_000
+            cache_rate = price.cache_read_per_1m / 1_000_000 if price.cache_read_per_1m else 0.0
+            cost["cache_savings"] = max(cache_tokens * (input_rate - cache_rate), 0.0)
+        else:
+            cost["cache_savings"] = 0.0
+        return cost
 
     weekly_rows = get_weekly_stats(
         project_filter=project_filter,
@@ -783,6 +986,7 @@ def _compute_period_costs_weekly(
                     r["thinking_tokens"],
                     price,
                 )
+                c = _with_savings(c, r["cache_tokens"], price)
                 _add(wcost, c)
                 mname = model_names.get(r["model"], r["model"])
                 by_model.setdefault(mname, []).append({"week": w.get("week", ""), **c})
@@ -810,11 +1014,21 @@ def _compute_period_costs_monthly(
             "cache_cost": 0.0,
             "reasoning_cost": 0.0,
             "total_cost": 0.0,
+            "cache_savings": 0.0,
         }
 
     def _add(target: dict[str, float], delta: dict[str, float]) -> None:
         for k in target:
             target[k] += delta.get(k, 0)
+
+    def _with_savings(cost: dict[str, float], cache_tokens: int, price: Any) -> dict[str, float]:
+        if price is not None and cache_tokens > 0:
+            input_rate = price.input_per_1m / 1_000_000
+            cache_rate = price.cache_read_per_1m / 1_000_000 if price.cache_read_per_1m else 0.0
+            cost["cache_savings"] = max(cache_tokens * (input_rate - cache_rate), 0.0)
+        else:
+            cost["cache_savings"] = 0.0
+        return cost
 
     monthly_rows = get_monthly_stats(
         project_filter=project_filter,
@@ -855,6 +1069,7 @@ def _compute_period_costs_monthly(
                     r["thinking_tokens"],
                     price,
                 )
+                c = _with_savings(c, r["cache_tokens"], price)
                 _add(mcost, c)
                 mname = model_names.get(r["model"], r["model"])
                 by_model.setdefault(mname, []).append({"month": mo.get("month", ""), **c})
