@@ -518,10 +518,10 @@ function buildHeatmap(){
   s.appendChild(g);
   const hl=Array.from({length:24},(_,i)=>i);
   const hd=hl.map(h=>{const f=D.hourly.find(x=>x.hour===h);return f?f.sessions:0});
-  new Chart(document.getElementById('xh1'),{type:'bar',data:{labels:hl.map(h=>h+'h'),datasets:[{data:hd,backgroundColor:C.or+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
+  new Chart(document.getElementById('xh1'),{type:'bar',data:{labels:hl.map(h=>h+'h'),datasets:[{label:'Sessions',data:hd,backgroundColor:C.or+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{title:{display:true,text:'Sessions',color:C.dm},grid:{color:GC}}}}});
   const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const dd=Array.from({length:7},(_,i)=>{const f=D.dow.find(x=>x.dow===i);return f?f.sessions:0});
-  new Chart(document.getElementById('xh2'),{type:'bar',data:{labels:dn,datasets:[{data:dd,backgroundColor:C.pr+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{grid:{color:GC}}}}});
+  new Chart(document.getElementById('xh2'),{type:'bar',data:{labels:dn,datasets:[{label:'Sessions',data:dd,backgroundColor:C.pr+'66',borderRadius:2}]},options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:GC},offset:true},y:{title:{display:true,text:'Sessions',color:C.dm},grid:{color:GC}}}}});
   const c3=mkCd();c3.innerHTML='<h3>Session Length Distribution</h3><canvas id="xh3" height="200"></canvas>';s.appendChild(c3);
   const bins=['0-1m','1-5m','5-15m','15-30m','30m-1h','1h+'];
   const bcounts=[0,0,0,0,0,0];
