@@ -143,9 +143,35 @@ def _get_pricing_data() -> dict:
     return data
 
 
+def _median_field(values: list[float]) -> float:
+    """Compute the median of a list, ignoring zeros."""
+    from statistics import median
+
+    nonzero = [v for v in values if v > 0]
+    return median(nonzero) if nonzero else 0.0
+
+
+def _merge_prices(prices: list[ModelPrice]) -> ModelPrice:
+    """Merge multiple ModelPrice entries by taking the median per field."""
+    if len(prices) == 1:
+        return prices[0]
+    return ModelPrice(
+        model_id=prices[0].model_id,
+        input_per_1m=_median_field([p.input_per_1m for p in prices]),
+        output_per_1m=_median_field([p.output_per_1m for p in prices]),
+        cache_read_per_1m=_median_field([p.cache_read_per_1m for p in prices]),
+        cache_write_per_1m=_median_field([p.cache_write_per_1m for p in prices]),
+        reasoning_per_1m=_median_field([p.reasoning_per_1m for p in prices]),
+    )
+
+
 def _build_price_index(data: dict) -> dict[str, ModelPrice]:
-    """Build a model_id -> ModelPrice index from models.dev data."""
-    index: dict[str, ModelPrice] = {}
+    """Build a model_id -> ModelPrice index from models.dev data.
+
+    When multiple providers offer the same model, the median price per
+    field is used so that outliers don't skew the estimate.
+    """
+    buckets: dict[str, list[ModelPrice]] = {}
     for _provider_id, provider in data.items():
         if not isinstance(provider, dict):
             continue
@@ -167,10 +193,13 @@ def _build_price_index(data: dict) -> dict[str, ModelPrice]:
                 cache_write_per_1m=cost.get("cache_write", 0),
                 reasoning_per_1m=cost.get("reasoning", 0),
             )
-            index[model_id] = price
+            buckets.setdefault(model_id, []).append(price)
             norm_name = _normalize(name)
-            if norm_name and norm_name not in index:
-                index[norm_name] = price
+            if norm_name:
+                buckets.setdefault(norm_name, []).append(price)
+    index: dict[str, ModelPrice] = {}
+    for key, prices in buckets.items():
+        index[key] = _merge_prices(prices)
     return index
 
 
@@ -271,6 +300,7 @@ def compute_cost(
             "cache_cost": 0.0,
             "reasoning_cost": 0.0,
             "total_cost": 0.0,
+            "cache_savings": 0.0,
         }
 
     m = 1_000_000
@@ -278,12 +308,16 @@ def compute_cost(
     oc = output_tokens / m * price.output_per_1m
     cc = cache_tokens / m * price.cache_read_per_1m
     rc = thinking_tokens / m * (price.reasoning_per_1m or price.output_per_1m)
+    input_rate = price.input_per_1m / m
+    cache_rate = price.cache_read_per_1m / m if price.cache_read_per_1m else 0.0
+    savings = max(cache_tokens * (input_rate - cache_rate), 0.0) if cache_tokens > 0 else 0.0
     return {
         "input_cost": ic,
         "output_cost": oc,
         "cache_cost": cc,
         "reasoning_cost": rc,
         "total_cost": ic + oc + cc + rc,
+        "cache_savings": savings,
     }
 
 

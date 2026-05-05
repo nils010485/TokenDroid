@@ -79,6 +79,32 @@ function buildAll() {
   if (scrollEl) scrollEl.scrollTop = savedScroll;
 }
 
+function populateFilters(D) {
+  if (!D) return;
+  const pSel = document.getElementById('filter-project');
+  const mSel = document.getElementById('filter-model');
+  if (!pSel || !mSel) return;
+
+  const curP = pSel.value;
+  const curM = mSel.value;
+
+  pSel.innerHTML = '<option value="">All Projects</option>';
+  (D.projects || []).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.name; o.textContent = p.name;
+    if (p.name === curP) o.selected = true;
+    pSel.appendChild(o);
+  });
+
+  mSel.innerHTML = '<option value="">All Models</option>';
+  (D.models || []).forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.name; o.textContent = m.name;
+    if (m.name === curM) o.selected = true;
+    mSel.appendChild(o);
+  });
+}
+
 function applyFilters() {
   const project = document.getElementById('filter-project')?.value || '';
   const model = document.getElementById('filter-model')?.value || '';
@@ -97,9 +123,7 @@ async function init() {
 
   const { dashboard: D } = DataManager.getData();
   populateFilters(D);
-
-  const { cost: CD } = DataManager.getData();
-  if (D) buildKPIs(D, CD);
+  buildAll();
 
   document.addEventListener('pageActivate', (e) => {
     buildPage(e.detail.pageId);

@@ -1,6 +1,8 @@
 const DataManager = (() => {
   let _dashboard = null;
   let _cost = null;
+  let _dashboardSig = '';
+  let _costSig = '';
   let _listeners = [];
   let _refreshTimer = null;
   const REFRESH_INTERVAL = 30000;
@@ -42,9 +44,19 @@ const DataManager = (() => {
       fetch('/api/dashboard'),
       fetch('/api/cost'),
     ]);
-    _dashboard = await r.json();
-    try { _cost = await rc.json(); } catch { _cost = null; }
-    document.dispatchEvent(new CustomEvent('dataUpdated', { detail: { dashboard: _dashboard, cost: _cost } }));
+    const newDash = await r.json();
+    let newCost = null;
+    try { newCost = await rc.json(); } catch { /* keep null */ }
+    const dashSig = JSON.stringify(newDash);
+    const costSig = JSON.stringify(newCost);
+    const changed = _dashboardSig !== dashSig || _costSig !== costSig;
+    _dashboard = newDash;
+    _cost = newCost;
+    _dashboardSig = dashSig;
+    _costSig = costSig;
+    if (changed) {
+      document.dispatchEvent(new CustomEvent('dataUpdated', { detail: { dashboard: _dashboard, cost: _cost } }));
+    }
     return { dashboard: _dashboard, cost: _cost };
   }
 

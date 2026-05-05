@@ -150,7 +150,14 @@ function buildTimelineControls(container, CD) {
   const modelMap = { daily: CD.daily_by_model || {}, weekly: CD.weekly_by_model || {}, monthly: CD.monthly_by_model || {} };
   function _cmn(n) { return n.replace(/^custom:/, '').replace(/-\d+$/, '').replace(/\[.*?\]/g, '').replace(/^-/, '').trim() || n; }
   const nameMap = {};
-  Object.values(modelMap).forEach(m => Object.keys(m).forEach(k => { nameMap[k] = _cmn(k); }));
+  const fullNamesMap = {};
+  Object.values(modelMap).forEach(m => Object.keys(m).forEach(k => {
+    const short = _cmn(k);
+    nameMap[k] = short;
+    if (!fullNamesMap[short]) fullNamesMap[short] = new Set();
+    fullNamesMap[short].add(k);
+  }));
+  Object.keys(fullNamesMap).forEach(k => { fullNamesMap[k] = [...fullNamesMap[k]]; });
   const revMap = Object.fromEntries(Object.entries(nameMap).map(([k, v]) => [v, k]));
   const matchedNames = [...new Set(Object.values(nameMap))];
   const modelTotal = matchedNames.map(n => {
@@ -162,14 +169,21 @@ function buildTimelineControls(container, CD) {
   const sortedIdx = matchedNames.map((_, i) => i).sort((a, b) => modelTotal[b] - modelTotal[a]);
   const allModels = sortedIdx.map(i => matchedNames[i]).filter(n => modelTotal[matchedNames.indexOf(n)] > 0);
   const mColors = allModels.map((_, i) => CL[i % CL.length]);
-  _selModels = new Set(allModels);
+
+  if (_selModels.size === 0) {
+    _selModels = new Set(allModels);
+  } else {
+    const prev = _selModels;
+    _selModels = new Set(allModels.filter(m => prev.has(m)));
+  }
 
   const md = document.createElement('div');
   md.className = 'model-checks';
 
+  const allChecked = _selModels.size === allModels.length;
   const toggleAll = document.createElement('label');
   toggleAll.className = 'cm-check';
-  toggleAll.innerHTML = '<input type="checkbox" checked><span>All</span>';
+  toggleAll.innerHTML = `<input type="checkbox" ${allChecked ? 'checked' : ''}><span>All</span>`;
   toggleAll.querySelector('input').onchange = function () {
     _selModels = this.checked ? new Set(allModels) : new Set();
     md.querySelectorAll('.cm-m').forEach((c, i) => {
@@ -181,11 +195,14 @@ function buildTimelineControls(container, CD) {
   md.appendChild(toggleAll);
 
   allModels.forEach((m, i) => {
+    const checked = _selModels.has(m);
     const l = document.createElement('label');
     l.className = 'cm-check cm-m';
-    l.innerHTML = `<input type="checkbox" checked><span style="color:${mColors[i]}">●</span><span>${m}</span>`;
+    l.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''}><span style="color:${mColors[i]}">●</span><span>${m}</span>`;
     l.querySelector('input').onchange = function () {
       if (this.checked) _selModels.add(m); else _selModels.delete(m);
+      // Update toggle-all state
+      toggleAll.querySelector('input').checked = _selModels.size === allModels.length;
       drawTimeline(CD);
     };
     md.appendChild(l);
@@ -196,6 +213,7 @@ function buildTimelineControls(container, CD) {
   container._revMap = revMap;
   container._mColors = mColors;
   container._modelMap = modelMap;
+  container._fullNamesMap = fullNamesMap;
 }
 
 function drawTimeline(CD) {
@@ -205,6 +223,7 @@ function drawTimeline(CD) {
   const revMap = ctrlArea._revMap || {};
   const mColors = ctrlArea._mColors || [];
   const modelMap = ctrlArea._modelMap || {};
+  const fullNamesMap = ctrlArea._fullNamesMap || {};
 
   const pKey = _selPeriod === 'daily' ? 'date' : _selPeriod === 'weekly' ? 'week' : 'month';
   const agg = CD[_selPeriod] || [];
@@ -231,18 +250,30 @@ function drawTimeline(CD) {
   }
 
   const data = { labels, datasets };
+  const tooltipCfg = {
+    callbacks: {
+      label: function(ctx) {
+        const ds = ctx.dataset;
+        if (ds.label === 'Total') return `  Total: ${fmtUSD(ctx.parsed.y)}`;
+        const fulls = fullNamesMap[ds.label];
+        const name = fulls && fulls.length > 1 ? `${ds.label} (${fulls.join(', ')})` : (fulls && fulls.length === 1 ? fulls[0] : ds.label);
+        return `  ${name}: ${fmtUSD(ctx.parsed.y)}`;
+      },
+    },
+  };
   if (!_tlChart) {
     _tlChart = new Chart(document.getElementById('cost-timeline'), {
       type: 'line', data,
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { boxWidth: 8, usePointStyle: true } } },
+        plugins: { legend: { labels: { boxWidth: 8, usePointStyle: true } }, tooltip: tooltipCfg },
         scales: { x: { grid: { color: GC }, offset: true, ticks: { maxRotation: 0, maxTicksLimit: _selPeriod === 'daily' ? 20 : undefined } }, y: { grid: { color: GC }, ticks: { callback: v => fmtUSD(v) } } },
       },
     });
   } else {
     _tlChart.data = data;
+    _tlChart.options.plugins.tooltip = tooltipCfg;
     _tlChart.options.scales.x.ticks.maxTicksLimit = _selPeriod === 'daily' ? 20 : undefined;
     _tlChart.update();
   }
