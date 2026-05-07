@@ -82,7 +82,7 @@ function renderBody(pane) {
     r.title,
   ]);
 
-  const t = mkSortTable(headers, rows, [0, 3, 4, 5, 6, 7, 8]);
+  const t = mkSortTable(headers, rows, [0, 3, 4, 5, 6, 7]);
   card.appendChild(t);
 
   renderPagination(card, p.page, p.totalPages, p.total, (newPage) => {
