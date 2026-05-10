@@ -20,6 +20,16 @@ _MODELS_DEV_URL = "https://models.dev/api.json"
 
 _OVERRIDE_MAP: dict[str, str] = {}
 
+
+def _is_zero_price(price: ModelPrice) -> bool:
+    """Return True if every per-1M rate on the price is zero."""
+    return (
+        price.input_per_1m == 0
+        and price.output_per_1m == 0
+        and price.cache_read_per_1m == 0
+        and price.reasoning_per_1m == 0
+    )
+
 _CUSTOM_PREFIX_RE = re.compile(r"^custom:", re.IGNORECASE)
 _BRACKET_RE = re.compile(r"[\[\(].*?[\]\)]", re.IGNORECASE)
 _CUSTOM_SUFFIX_NUM_RE = re.compile(r"[-_]\d+$")
@@ -225,40 +235,52 @@ def match_model_price(model_display: str, model_id: str = "") -> ModelPrice | No
     """Find the pricing for a model given its display name and raw ID.
 
     Matching strategy in order:
-      1. Exact match on model_id
-      2. Override map lookup
-      3. Exact match on model_display
-      4. Exact normalized match on display or id
-      5. Substring containment match on normalized index keys
-      6. Fuzzy keyword scoring across all index entries
+      1. Exact match on model_id (non-zero price)
+      2. Override map lookup (non-zero price)
+      3. Exact match on model_display (non-zero price)
+      4. Exact normalized match on display or id (non-zero price)
+      5. Substring containment match on normalized index keys (non-zero price)
+      6. Fuzzy keyword scoring across all index entries (non-zero price)
 
-    Returns None if no confident match is found, meaning the model
+    Zero-price entries (e.g. provider routers with no cost data) are skipped
+    so that a meaningful price from another provider can be used instead.
+
+    Returns None if no confident non-zero match is found, meaning the model
     is not in the models.dev database and its cost is unknown.
     """
     index = get_price_index()
 
-    if model_id and model_id in index:
+    if model_id and model_id in index and not _is_zero_price(index[model_id]):
         return index[model_id]
 
     override = _OVERRIDE_MAP.get(model_display) or _OVERRIDE_MAP.get(model_id)
-    if override and override in index:
+    if override and override in index and not _is_zero_price(index[override]):
         return index[override]
 
-    if model_display in index:
+    if model_display in index and not _is_zero_price(index[model_display]):
         return index[model_display]
 
     norm_disp = _normalize(model_display)
-    if norm_disp in index:
+    if norm_disp in index and not _is_zero_price(index[norm_disp]):
         return index[norm_disp]
 
     norm_id = _normalize(model_id) if model_id else ""
-    if norm_id and norm_id in index:
+    if norm_id and norm_id in index and not _is_zero_price(index[norm_id]):
         return index[norm_id]
 
     for key, price in index.items():
+        if _is_zero_price(price):
+            continue
         if norm_disp and norm_disp in key:
             return price
         if norm_id and norm_id in key:
+            return price
+        # Also match when an index key is contained inside the normalized
+        # display name (e.g. "kimi-k2-6" inside "kimi-k2-6-turbo").  Require
+        # a reasonably long key to avoid false positives.
+        if norm_disp and len(key) >= 6 and key in norm_disp:
+            return price
+        if norm_id and len(key) >= 6 and key in norm_id:
             return price
 
     keywords = _extract_keywords(model_display)
@@ -270,6 +292,8 @@ def match_model_price(model_display: str, model_id: str = "") -> ModelPrice | No
     best_score = 0.0
     best_price: ModelPrice | None = None
     for key, price in index.items():
+        if _is_zero_price(price):
+            continue
         score = _fuzzy_score(keywords, key)
         if score > best_score:
             best_score = score

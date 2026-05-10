@@ -714,6 +714,8 @@ def get_cost_summary(
     monthly breakdowns, cache_savings, forecast, and avg cost metrics.
     Models without a price match get cost of 0.
     """
+    from .pricing import match_model_price
+
     conn = _ensure_synced()
     try:
         where, params = _build_where(project_filter, model_filter, date_from, date_to)
@@ -753,12 +755,13 @@ def get_cost_summary(
         for r in model_rows:
             avg_sess = r["total_cost"] / r["sessions"] if r["sessions"] else 0.0
             avg_msg = r["total_cost"] / r["messages"] if r["messages"] else 0.0
+            price = match_model_price(r["model_display"], r["model"])
             by_model.append(
                 _cost_dict(
                     r,
                     name=r["model_display"],
                     model_id=r["model"],
-                    matched=r["total_cost"] > 0,
+                    matched=price is not None,
                     sessions=r["sessions"],
                     messages=r["messages"],
                     avg_cost_per_session=avg_sess,
