@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
 import orjson
+
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
 from .models import HistoryEntry, ModelInfo, SessionData
 
@@ -177,13 +180,22 @@ def parse_history() -> list[HistoryEntry]:
     if not HISTORY_FILE.exists():
         return []
     with open(HISTORY_FILE, "rb") as f:
-        data = orjson.loads(f.read())
+        raw = f.read()
+    try:
+        data = orjson.loads(raw)
+    except orjson.JSONDecodeError:
+        import json
+
+        data = json.loads(raw)
     entries: list[HistoryEntry] = []
     for item in data:
+        command = item.get("command", "")
+        if _SURROGATE_RE.search(command):
+            command = _SURROGATE_RE.sub("", command)
         entries.append(
             HistoryEntry(
                 timestamp=item.get("timestamp", ""),
-                command=item.get("command", ""),
+                command=command,
                 entry_type=item.get("type", ""),
                 mode=item.get("mode", ""),
             )
