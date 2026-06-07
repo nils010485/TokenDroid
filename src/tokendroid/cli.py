@@ -7,9 +7,9 @@ from rich.console import Console
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="tokendroid")
+@click.version_option(version="0.2.0", prog_name="tokendroid")
 def cli() -> None:
-    """TokenDroid - Factory Droid analytics dashboard."""
+    """TokenDroid - Factory Droid & Pi agent analytics dashboard."""
 
 
 @cli.group()
@@ -199,7 +199,7 @@ def web(host: str, port: int, no_open: bool) -> None:
 @cli.command()
 @click.option("--full", is_flag=True, help="Force full re-sync")
 def sync(full: bool) -> None:
-    """Force sync cache from ~/.factory."""
+    """Force sync cache from ~/.factory and ~/.pi/agent."""
     from .db import sync as do_sync
 
     console = Console()

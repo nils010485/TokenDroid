@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import DailyStat, GlobalStats, ModelSummary, ProjectSummary, SessionData
-from .parser import get_file_mtimes, iter_sessions, parse_history
+from .parser import get_all_file_mtimes, iter_all_sessions, parse_history
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     model TEXT NOT NULL DEFAULT '',
     model_display TEXT NOT NULL DEFAULT '',
     provider TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'factory',
     interaction_mode TEXT NOT NULL DEFAULT '',
     autonomy_level TEXT NOT NULL DEFAULT '',
     reasoning_effort TEXT NOT NULL DEFAULT '',
@@ -100,6 +101,7 @@ _COST_SELECT = ",\n           ".join(
 _MIGRATIONS = [
     ("sessions", _COST_COLUMNS),
     ("daily_stats", _COST_COLUMNS),
+    ("sessions", ["source"]),
 ]
 
 _migrated = False
@@ -136,8 +138,8 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def needs_sync(conn: sqlite3.Connection) -> bool:
-    """Check if any factory files changed since last sync."""
-    current = get_file_mtimes()
+    """Check if any source files (Factory or Pi) changed since last sync."""
+    current = get_all_file_mtimes()
     if not current:
         return False
     rows = conn.execute("SELECT factory_path, last_modified FROM sync_state").fetchall()
@@ -159,7 +161,7 @@ def sync(full: bool = False) -> int:
             conn.execute("DELETE FROM sync_state")
             conn.execute("DELETE FROM history")
 
-        sessions = list(iter_sessions())
+        sessions = list(iter_all_sessions())
         _upsert_sessions(conn, sessions)
         _rebuild_daily(conn)
         _sync_history(conn)
@@ -192,6 +194,7 @@ def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> N
                 s.model,
                 s.model_display,
                 s.provider,
+                s.source,
                 s.interaction_mode,
                 s.autonomy_level,
                 s.reasoning_effort,
@@ -215,12 +218,12 @@ def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> N
         )
     conn.executemany(
         """INSERT OR REPLACE INTO sessions
-        (id, project, title, model, model_display, provider,
+        (id, project, title, model, model_display, provider, source,
          interaction_mode, autonomy_level, reasoning_effort, started_at,
          input_tokens, output_tokens, thinking_tokens, cache_tokens,
          active_time_ms, message_count, user_messages, assistant_messages, tool_calls,
          input_cost, output_cost, cache_cost, reasoning_cost, total_cost, cache_savings)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?)""",
         rows,
     )
@@ -271,7 +274,7 @@ def _sync_history(conn: sqlite3.Connection) -> None:
 
 def _update_sync_state(conn: sqlite3.Connection) -> None:
     """Record current file mtimes as the sync checkpoint."""
-    mtimes = get_file_mtimes()
+    mtimes = get_all_file_mtimes()
     conn.executemany(
         "INSERT OR REPLACE INTO sync_state (factory_path, last_modified) VALUES (?, ?)",
         list(mtimes.items()),

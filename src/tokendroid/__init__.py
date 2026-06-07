@@ -1,1 +1,1 @@
-"""TokenDroid - Factory Droid analytics dashboard."""
+"""TokenDroid - Factory Droid and Pi agent analytics dashboard."""

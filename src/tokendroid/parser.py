@@ -1,4 +1,4 @@
-"""Parse Factory Droid data from ~/.factory."""
+"""Parse Factory Droid data from ~/.factory and Pi agent data from ~/.pi/agent/."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from pathlib import Path
 
 import orjson
 
-_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
-
 from .models import HistoryEntry, ModelInfo, SessionData
+
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
 FACTORY_DIR = Path.home() / ".factory"
 SESSIONS_DIR = FACTORY_DIR / "sessions"
@@ -218,3 +218,21 @@ def get_file_mtimes() -> dict[str, float]:
             except OSError:
                 continue
     return mtimes
+
+
+def get_all_file_mtimes() -> dict[str, float]:
+    """Get modification times for Factory + Pi session files."""
+    from .pi_parser import get_pi_file_mtimes
+
+    mtimes = get_file_mtimes()
+    mtimes.update(get_pi_file_mtimes())
+    return mtimes
+
+
+def iter_all_sessions() -> Iterator[SessionData]:
+    """Iterate over sessions from both Factory and Pi sources."""
+    yield from iter_sessions()
+
+    from .pi_parser import iter_pi_sessions
+
+    yield from iter_pi_sessions()

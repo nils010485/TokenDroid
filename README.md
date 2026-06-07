@@ -1,11 +1,11 @@
 # TokenDroid
 
-Analytics dashboard for [Factory](https://factory.ai/) Droid usage data. Parses
-session files from `~/.factory/sessions/`, indexes them into a local SQLite
+Analytics dashboard for [Factory](https://factory.ai/) Droid and [Pi](https://github.com/nicehash/pi-coding-agent) coding agent usage data. Parses
+session files from `~/.factory/sessions/` and `~/.pi/agent/sessions/`, indexes them into a local SQLite
 cache, and provides multiple interfaces to explore token consumption, model
 usage, and project activity.
 
-> **Note:** This project is not affiliated with [Factory](https://factory.ai/).
+> **Note:** This project is not affiliated with [Factory](https://factory.ai/) or Pi.
 
 ![Web Dashboard](docs/dashboard.png)
 
@@ -48,7 +48,7 @@ uv sync
 ### Sync
 
 ```bash
-tokendroid sync          # Incremental sync from ~/.factory
+tokendroid sync          # Incremental sync from ~/.factory and ~/.pi/agent
 tokendroid sync --full   # Force full re-sync
 ```
 
@@ -101,7 +101,9 @@ src/tokendroid/
   cli.py               Click CLI entry point
   models.py            Dataclasses for sessions, stats, summaries
   parser.py            Reads ~/.factory sessions, settings, history
+  pi_parser.py         Reads ~/.pi/agent sessions, model display names
   db.py                SQLite cache with incremental sync
+  pricing.py            Cost estimation via models.dev API
   display/
     utils.py           Shared formatters, colors, sparklines
     rich_cmd.py        Rich CLI display commands
@@ -114,7 +116,12 @@ src/tokendroid/
 
 **Data flow:**
 
-`~/.factory/sessions/` --> `parser.py` --> `db.py` (SQLite) --> `display/` | `web/`
+`~/.factory/sessions/` + `~/.pi/agent/sessions/` --> `parser.py` + `pi_parser.py` --> `db.py` (SQLite) --> `display/` | `web/`
+
+> **Cost estimation:** Pi's `models.json` declares all model costs as `0`.
+> TokenDroid ignores these values and computes costs independently using
+> the [models.dev](https://models.dev/) API, ensuring consistent pricing
+> across both Factory and Pi sources.
 
 ---
 

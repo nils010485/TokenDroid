@@ -19,6 +19,7 @@ class SessionData:
     autonomy_level: str
     reasoning_effort: str
     started_at: str
+    source: str = "factory"  # "factory" or "pi"
     input_tokens: int = 0
     output_tokens: int = 0
     thinking_tokens: int = 0
