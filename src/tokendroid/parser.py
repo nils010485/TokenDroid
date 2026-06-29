@@ -221,18 +221,22 @@ def get_file_mtimes() -> dict[str, float]:
 
 
 def get_all_file_mtimes() -> dict[str, float]:
-    """Get modification times for Factory + Pi session files."""
+    """Get modification times for Factory + Pi + Plasma session files."""
     from .pi_parser import get_pi_file_mtimes
+    from .plasma_parser import get_plasma_file_mtimes
 
     mtimes = get_file_mtimes()
     mtimes.update(get_pi_file_mtimes())
+    mtimes.update(get_plasma_file_mtimes())
     return mtimes
 
 
 def iter_all_sessions() -> Iterator[SessionData]:
-    """Iterate over sessions from both Factory and Pi sources."""
+    """Iterate over sessions from Factory, Pi, and Plasma sources."""
     yield from iter_sessions()
 
     from .pi_parser import iter_pi_sessions
+    from .plasma_parser import iter_plasma_sessions
 
     yield from iter_pi_sessions()
+    yield from iter_plasma_sessions()

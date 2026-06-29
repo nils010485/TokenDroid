@@ -16,9 +16,10 @@ from tokendroid.db import (
     sync,
 )
 
-# Both source dirs must be patched to avoid reading real data
+# All source dirs must be patched to avoid reading real data
 _PATCH_FACTORY_DIR = patch("tokendroid.parser.SESSIONS_DIR", Path("/nonexistent"))
 _PATCH_PI_DIR = patch("tokendroid.pi_parser.PI_SESSIONS_DIR", Path("/nonexistent"))
+_PATCH_PLASMA_DIR = patch("tokendroid.plasma_parser.PLASMA_SESSIONS_DIR", Path("/nonexistent"))
 
 
 @pytest.fixture
@@ -91,13 +92,13 @@ class TestEscapeLike:
 
 class TestNeedsSync:
     def test_empty_dir(self, conn):
-        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR:
+        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR, _PATCH_PLASMA_DIR:
             assert needs_sync(conn) is False
 
 
 class TestSync:
     def test_sync_empty(self, db_dir):
-        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR:
+        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR, _PATCH_PLASMA_DIR:
             count = sync()
         assert count == 0
 
@@ -118,6 +119,7 @@ class TestSync:
             patch("tokendroid.parser.SESSIONS_DIR", tmp_path / "sessions"),
             patch("tokendroid.parser.SETTINGS_FILE", Path("/nonexistent")),
             _PATCH_PI_DIR,
+            _PATCH_PLASMA_DIR,
         ):
             count = sync()
 
@@ -126,7 +128,7 @@ class TestSync:
 
 class TestGetGlobalStats:
     def test_empty_db(self, db_dir):
-        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR:
+        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR, _PATCH_PLASMA_DIR:
             stats = get_global_stats()
         assert stats.total_sessions == 0
         assert stats.total_input_tokens == 0
@@ -134,6 +136,6 @@ class TestGetGlobalStats:
 
 class TestGetTopSessions:
     def test_empty(self, db_dir):
-        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR:
+        with _PATCH_FACTORY_DIR, _PATCH_PI_DIR, _PATCH_PLASMA_DIR:
             result = get_top_sessions(5)
         assert result == []
