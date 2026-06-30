@@ -231,6 +231,48 @@ def refresh_pricing() -> bool:
         return False
 
 
+def _containment_match(
+    index: dict[str, ModelPrice], norm_disp: str, norm_id: str
+) -> ModelPrice | None:
+    """Find the most specific substring-containment match.
+
+    Two directions are considered, and the candidate explaining the largest
+    portion of the display name/id wins:
+      * Direction A: an index key contains the normalized display/id.
+        Prefer the shortest such key (least extra noise).
+      * Direction B: the normalized display/id contains an index key.
+        Prefer the longest such key (most specific version, e.g.
+        "kimi-k2-6" beats "kimi-k2"). Requires keys of length >= 6 to
+        avoid spurious short matches.
+    """
+    best_price: ModelPrice | None = None
+    best_score = 0.0
+
+    for norm_target in (norm_disp, norm_id):
+        if not norm_target:
+            continue
+        target_len = len(norm_target)
+        for key, price in index.items():
+            if _is_zero_price(price):
+                continue
+            # Direction A: key wraps the full target. Score = coverage of
+            # the target; break ties by shorter (less noisy) key.
+            if norm_target in key:
+                score = target_len - (len(key) - target_len) / 100.0
+            # Direction B: target wraps the key. Only keys long enough to be
+            # meaningful count. Score = how much of the target is explained;
+            # longer keys win.
+            elif len(key) >= 6 and key in norm_target:
+                score = len(key)
+            else:
+                continue
+            if score > best_score:
+                best_score = score
+                best_price = price
+
+    return best_price
+
+
 def match_model_price(model_display: str, model_id: str = "") -> ModelPrice | None:
     """Find the pricing for a model given its display name and raw ID.
 
@@ -239,7 +281,9 @@ def match_model_price(model_display: str, model_id: str = "") -> ModelPrice | No
       2. Override map lookup (non-zero price)
       3. Exact match on model_display (non-zero price)
       4. Exact normalized match on display or id (non-zero price)
-      5. Substring containment match on normalized index keys (non-zero price)
+      5. Substring containment match on normalized index keys (non-zero
+         price), picking the most specific candidate instead of the first
+         one found.
       6. Fuzzy keyword scoring across all index entries (non-zero price)
 
     Zero-price entries (e.g. provider routers with no cost data) are skipped
@@ -268,20 +312,9 @@ def match_model_price(model_display: str, model_id: str = "") -> ModelPrice | No
     if norm_id and norm_id in index and not _is_zero_price(index[norm_id]):
         return index[norm_id]
 
-    for key, price in index.items():
-        if _is_zero_price(price):
-            continue
-        if norm_disp and norm_disp in key:
-            return price
-        if norm_id and norm_id in key:
-            return price
-        # Also match when an index key is contained inside the normalized
-        # display name (e.g. "kimi-k2-6" inside "kimi-k2-6-turbo").  Require
-        # a reasonably long key to avoid false positives.
-        if norm_disp and len(key) >= 6 and key in norm_disp:
-            return price
-        if norm_id and len(key) >= 6 and key in norm_id:
-            return price
+    containment = _containment_match(index, norm_disp, norm_id)
+    if containment is not None:
+        return containment
 
     keywords = _extract_keywords(model_display)
     if not keywords:

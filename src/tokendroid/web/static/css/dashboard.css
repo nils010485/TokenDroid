@@ -439,7 +439,7 @@ tfoot td { font-weight: 600; color: var(--text); border-top: 2px solid var(--bor
 .pane > .g2,
 .pane > .g3,
 .pane > .ctrl-bar,
-.pane > .search-input + .cd,
+.pane > .search-input,
 .pane > .empty-state {
   margin-bottom: 14px;
 }

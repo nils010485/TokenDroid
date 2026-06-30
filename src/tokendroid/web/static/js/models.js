@@ -1,7 +1,7 @@
 import DataManager from './data.js';
 import Comp from './components.js';
 
-const { fmt, hitP, pct, tot } = DataManager;
+const { fmt, hitP, pct } = DataManager;
 const { C, CL, GC, mkCard, mkTable, bar } = Comp;
 
 let _charts = {};
@@ -56,7 +56,7 @@ function build(pane, D, CD) {
     options: { maintainAspectRatio: false, aspectRatio: 1, plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 10 } } } } },
   });
 
-  const totalTokens = tot(D.models.map(x => (x.input || 0) + (x.cache || 0) + (x.output || 0)), 0) || 1;
+  const totalTokens = D.models.reduce((s, x) => s + (x.input || 0) + (x.cache || 0) + (x.output || 0), 0) || 1;
   const ct = mkCard('w');
   ct.appendChild(mkTable(
     ['Model', 'Sess', 'Input', 'Cache', 'Hit%', 'Output', 'Active', 'Share', ''],
