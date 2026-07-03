@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     model_display TEXT NOT NULL DEFAULT '',
     provider TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'factory',
+    is_subagent INTEGER NOT NULL DEFAULT 0,
     interaction_mode TEXT NOT NULL DEFAULT '',
     autonomy_level TEXT NOT NULL DEFAULT '',
     reasoning_effort TEXT NOT NULL DEFAULT '',
@@ -98,17 +99,24 @@ _COST_SELECT = ",\n           ".join(
     f"COALESCE(SUM({c}), 0) as {c}" for c in _COST_COLUMNS
 )
 
-_MIGRATIONS = [
+_MIGRATIONS: list[tuple[str, list]] = [
     ("sessions", _COST_COLUMNS),
     ("daily_stats", _COST_COLUMNS),
-    ("sessions", ["source"]),
+    ("sessions", [("source", "TEXT NOT NULL DEFAULT 'factory'")]),
+    ("sessions", [("is_subagent", "INTEGER NOT NULL DEFAULT 0")]),
 ]
 
 _migrated = False
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Add cost columns to existing tables that lack them."""
+    """Add cost columns to existing tables that lack them.
+
+    Each migration entry is either a bare column name (added as
+    ``REAL NOT NULL DEFAULT 0.0`` for historic cost columns) or a
+    ``(name, definition)`` tuple where ``definition`` is the full SQL type +
+    constraint to use in the ``ALTER TABLE ... ADD COLUMN``.
+    """
     global _migrated
     if _migrated:
         return
@@ -118,9 +126,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
             for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
         }
         for col in columns:
-            if col not in existing:
+            if isinstance(col, tuple):
+                name, definition = col
+            else:
+                name, definition = col, "REAL NOT NULL DEFAULT 0.0"
+            if name not in existing:
                 conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {col} REAL NOT NULL DEFAULT 0.0"
+                    f"ALTER TABLE {table} ADD COLUMN {name} {definition}"
                 )
     _migrated = True
 
@@ -195,6 +207,7 @@ def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> N
                 s.model_display,
                 s.provider,
                 s.source,
+                int(s.is_subagent),
                 s.interaction_mode,
                 s.autonomy_level,
                 s.reasoning_effort,
@@ -219,12 +232,14 @@ def _upsert_sessions(conn: sqlite3.Connection, sessions: list[SessionData]) -> N
     conn.executemany(
         """INSERT OR REPLACE INTO sessions
         (id, project, title, model, model_display, provider, source,
+         is_subagent,
          interaction_mode, autonomy_level, reasoning_effort, started_at,
          input_tokens, output_tokens, thinking_tokens, cache_tokens,
          active_time_ms, message_count, user_messages, assistant_messages, tool_calls,
          input_cost, output_cost, cache_cost, reasoning_cost, total_cost, cache_savings)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
 

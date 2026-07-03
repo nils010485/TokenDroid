@@ -26,15 +26,22 @@ def get_plasma_dir() -> Path:
     return PLASMA_DIR
 
 
-def get_plasma_model_display_map() -> dict[str, ModelInfo]:
-    """Parse Plasma's models.json providers into a model_id -> ModelInfo map."""
-    mapping: dict[str, ModelInfo] = {}
+def get_plasma_model_display_map() -> dict[tuple[str, str], ModelInfo]:
+    """Parse Plasma's models.json providers into a ``(provider, model_id) -> ModelInfo`` map.
+
+    The same model ``id`` can exist under several providers with different
+    names (e.g. ``glm-5.2`` is ``GLM-5.2 [NW]`` under ``neuralwatt-extra``
+    but ``GLM5.2 [Z.AI]`` under ``zai``). Keying by ``(provider, model_id)``
+    keeps each combination distinct instead of letting the first provider's
+    name win for every session.
+    """
+    mapping: dict[tuple[str, str], ModelInfo] = {}
     if not PLASMA_MODELS_FILE.exists():
         return mapping
     with open(PLASMA_MODELS_FILE, "rb") as f:
         data = orjson.loads(f.read())
     providers = data.get("providers", {})
-    for _provider_id, provider in providers.items():
+    for provider_id, provider in providers.items():
         if not isinstance(provider, dict):
             continue
         base_url = provider.get("baseUrl", "")
@@ -42,13 +49,12 @@ def get_plasma_model_display_map() -> dict[str, ModelInfo]:
             mid = m.get("id", "")
             if not mid:
                 continue
-            if mid not in mapping:
-                mapping[mid] = ModelInfo(
-                    model_id=mid,
-                    display_name=m.get("name", mid),
-                    provider=_provider_id,
-                    base_url=base_url,
-                )
+            mapping[(provider_id, mid)] = ModelInfo(
+                model_id=mid,
+                display_name=m.get("name", mid),
+                provider=provider_id,
+                base_url=base_url,
+            )
     return mapping
 
 
@@ -63,13 +69,18 @@ def iter_plasma_sessions() -> Iterator[SessionData]:
             continue
         project_name = _clean_pi_project_name(project_dir.name)
 
-        for jsonl_file in sorted(project_dir.glob("*.jsonl")):
+        for jsonl_file in sorted(project_dir.rglob("*.jsonl")):
             try:
                 data = parse_pi_session_jsonl(jsonl_file)
 
                 model_id = data["model"]
-                info = model_map.get(model_id)
+                info = model_map.get((data["provider"], model_id))
                 model_display = info.display_name if info else model_id
+
+                # Depth-1 files (directly under the project dir) are normal
+                # sessions; anything nested deeper is a subagent session
+                # stored under <uuid>/<hash>/run-N/session.jsonl.
+                is_subagent = len(jsonl_file.relative_to(project_dir).parts) > 1
 
                 yield SessionData(
                     id=data["session_id"],
@@ -83,6 +94,7 @@ def iter_plasma_sessions() -> Iterator[SessionData]:
                     reasoning_effort=data.get("thinking_level", ""),
                     started_at=data["started_at"],
                     source="plasma",
+                    is_subagent=is_subagent,
                     input_tokens=data["input_tokens"],
                     output_tokens=data["output_tokens"],
                     thinking_tokens=data["thinking_tokens"],
@@ -105,9 +117,7 @@ def get_plasma_file_mtimes() -> dict[str, float]:
     for project_dir in PLASMA_SESSIONS_DIR.iterdir():
         if not project_dir.is_dir():
             continue
-        for f in project_dir.iterdir():
-            if f.suffix != ".jsonl":
-                continue
+        for f in project_dir.rglob("*.jsonl"):
             try:
                 rel = f"plasma:{f.relative_to(PLASMA_SESSIONS_DIR)}"
                 mtimes[rel] = f.stat().st_mtime

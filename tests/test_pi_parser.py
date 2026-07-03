@@ -87,11 +87,19 @@ class TestGetPiModelDisplayMap:
         models_file.write_text(json.dumps(data))
         with patch("tokendroid.pi_parser.PI_MODELS_FILE", models_file):
             result = get_pi_model_display_map()
-        # First provider wins for duplicate model IDs
-        assert "zai-org/GLM-5.1-FP8" in result
-        assert result["zai-org/GLM-5.1-FP8"].display_name == "GLM-5.1"
-        assert "kimi-k2.6-fast" in result
-        assert result["kimi-k2.6-fast"].display_name == "Kimi K2.6 Fast"
+        # Keyed by (provider, model_id) so the same model id under
+        # different providers keeps its own display name.
+        assert ("neuralwatt", "zai-org/GLM-5.1-FP8") in result
+        assert result[("neuralwatt", "zai-org/GLM-5.1-FP8")].display_name == "GLM-5.1"
+        assert ("other_provider", "zai-org/GLM-5.1-FP8") in result
+        assert (
+            result[("other_provider", "zai-org/GLM-5.1-FP8")].display_name
+            == "GLM-5.1 [Other]"
+        )
+        assert ("neuralwatt", "kimi-k2.6-fast") in result
+        assert (
+            result[("neuralwatt", "kimi-k2.6-fast")].display_name == "Kimi K2.6 Fast"
+        )
 
 
 def _write_jsonl(path, lines):
@@ -359,3 +367,142 @@ class TestIterPiSessions:
         assert s.model == "zai-org/GLM-5.1-FP8"
         assert s.input_tokens == 500
         assert s.output_tokens == 50
+        assert s.is_subagent is False
+
+    def test_display_name_resolved_per_provider(self, tmp_path):
+        """Same model id under different providers keeps distinct names."""
+        sessions_dir = tmp_path / "sessions" / "--home-user-project--"
+        sessions_dir.mkdir(parents=True)
+
+        # A model_change declares the *actual* provider used by the session.
+        # The same model id exists under two providers in models.json with
+        # different display names; the session must resolve to the one
+        # matching its provider.
+        def _session(path, sid, provider):
+            _write_jsonl(
+                path,
+                [
+                    {
+                        "type": "session",
+                        "id": sid,
+                        "timestamp": "2026-06-02T14:00:00Z",
+                        "cwd": "/home/user/project",
+                    },
+                    {
+                        "type": "model_change",
+                        "provider": provider,
+                        "modelId": "glm-5.2",
+                    },
+                    {
+                        "type": "message",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "hi"}],
+                            "usage": {"input": 100, "output": 10},
+                        },
+                    },
+                ],
+            )
+
+        _session(
+            sessions_dir / "2026-06-02T14-00-00-000Z_a.jsonl", "a", "neuralwatt-extra"
+        )
+        _session(sessions_dir / "2026-06-02T15-00-00-000Z_b.jsonl", "b", "zai")
+
+        models_file = tmp_path / "models.json"
+        models_file.write_text(
+            json.dumps(
+                {
+                    "providers": {
+                        "neuralwatt-extra": {
+                            "baseUrl": "https://api.neuralwatt.com/v1",
+                            "models": [{"id": "glm-5.2", "name": "GLM-5.2 [NW]"}],
+                        },
+                        "zai": {
+                            "baseUrl": "https://api.z.ai",
+                            "models": [{"id": "glm-5.2", "name": "GLM5.2 [Z.AI]"}],
+                        },
+                    }
+                }
+            )
+        )
+
+        with (
+            patch("tokendroid.pi_parser.PI_SESSIONS_DIR", tmp_path / "sessions"),
+            patch("tokendroid.pi_parser.PI_MODELS_FILE", models_file),
+        ):
+            sessions = {s.id: s for s in iter_pi_sessions()}
+
+        assert sessions["a"].model_display == "GLM-5.2 [NW]"
+        assert sessions["b"].model_display == "GLM5.2 [Z.AI]"
+
+    def test_nested_subagent_sessions_discovered(self, tmp_path):
+        """Nested subagent session.jsonl files are picked up and flagged."""
+        project = tmp_path / "sessions" / "--home-user-project--"
+        project.mkdir(parents=True)
+
+        # Normal top-level session
+        _write_jsonl(
+            project / "2026-06-02T14-00-00-000Z_parent.jsonl",
+            [
+                {
+                    "type": "session",
+                    "id": "parent",
+                    "timestamp": "2026-06-02T14:00:00Z",
+                    "cwd": "/home/user/project",
+                },
+                {
+                    "type": "model_change",
+                    "provider": "neuralwatt",
+                    "modelId": "glm-5.2",
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "hi"}],
+                        "usage": {"input": 1000, "output": 100},
+                    },
+                },
+            ],
+        )
+
+        # Nested subagent session: <uuid>/<hash>/run-N/session.jsonl
+        sub = project / "2026-06-02T14-00-00-000Z_parent" / "abc123" / "run-0"
+        sub.mkdir(parents=True)
+        _write_jsonl(
+            sub / "session.jsonl",
+            [
+                {
+                    "type": "session",
+                    "id": "sub-run-0",
+                    "timestamp": "2026-06-02T14:01:00Z",
+                    "cwd": "/home/user/project",
+                },
+                {
+                    "type": "model_change",
+                    "provider": "neuralwatt",
+                    "modelId": "glm-5.2",
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "work"}],
+                        "usage": {"input": 5000, "output": 500},
+                    },
+                },
+            ],
+        )
+
+        with (
+            patch("tokendroid.pi_parser.PI_SESSIONS_DIR", tmp_path / "sessions"),
+            patch("tokendroid.pi_parser.PI_MODELS_FILE", Path("/nonexistent")),
+        ):
+            sessions = {s.id: s for s in iter_pi_sessions()}
+
+        assert set(sessions) == {"parent", "sub-run-0"}
+        assert sessions["parent"].is_subagent is False
+        assert sessions["sub-run-0"].is_subagent is True
+        assert sessions["parent"].input_tokens == 1000
+        assert sessions["sub-run-0"].input_tokens == 5000

@@ -19,7 +19,8 @@ class SessionData:
     autonomy_level: str
     reasoning_effort: str
     started_at: str
-    source: str = "factory"  # "factory" or "pi"
+    source: str = "factory"  # "factory", "pi", or "plasma"
+    is_subagent: bool = False  # True for nested pi/plasma subagent sessions
     input_tokens: int = 0
     output_tokens: int = 0
     thinking_tokens: int = 0
