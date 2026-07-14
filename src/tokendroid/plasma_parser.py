@@ -1,13 +1,20 @@
-"""Parse Plasma coding agent data from ~/.local/share/plasma/pi-agent/.
+"""Parse Plasma coding agent data from its platform-specific data directory.
 
 Plasma is a Pi-compatible harness: sessions use the exact same JSONL format
 as Pi, only the storage directory differs. We reuse pi_parser's parsing logic
 (``parse_pi_session_jsonl``, ``_clean_pi_project_name``) and override only the
 directory and ``source`` label.
+
+Plasma is a Tauri app, so its data directory follows the OS convention:
+  - Windows: ``%APPDATA%/plasma/pi-agent``  (usually ``~/AppData/Roaming/...``)
+  - macOS:   ``~/Library/Application Support/plasma/pi-agent``
+  - Linux:   ``~/.local/share/plasma/pi-agent``
 """
 
 from __future__ import annotations
 
+import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -16,7 +23,23 @@ import orjson
 from .models import ModelInfo, SessionData
 from .pi_parser import _clean_pi_project_name, parse_pi_session_jsonl
 
-PLASMA_DIR = Path.home() / ".local" / "share" / "plasma" / "pi-agent"
+
+def _plasma_base_dir() -> Path:
+    """Return the Plasma data directory, OS-aware (Tauri app conventions)."""
+    # Windows: respect %APPDATA% when set, fall back to ~/AppData/Roaming.
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / "plasma" / "pi-agent"
+        return Path.home() / "AppData" / "Roaming" / "plasma" / "pi-agent"
+    # macOS: ~/Library/Application Support
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "plasma" / "pi-agent"
+    # Linux / other: XDG data dir
+    return Path.home() / ".local" / "share" / "plasma" / "pi-agent"
+
+
+PLASMA_DIR = _plasma_base_dir()
 PLASMA_SESSIONS_DIR = PLASMA_DIR / "sessions"
 PLASMA_MODELS_FILE = PLASMA_DIR / "models.json"
 
