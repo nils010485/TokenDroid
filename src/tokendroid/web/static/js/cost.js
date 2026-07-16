@@ -257,6 +257,7 @@ function drawTimeline(CD) {
 
   const data = { labels, datasets };
   const tooltipCfg = {
+    filter: function(ctx) { return ctx.parsed.y > 0; },
     callbacks: {
       label: function(ctx) {
         const ds = ctx.dataset;
